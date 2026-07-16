@@ -13,7 +13,7 @@ Open http://localhost:3000. No environment variables, no network calls at runtim
 
 ## Where data lives
 
-Everything is in `./data/content.db` (SQLite, WAL mode). The `data/` directory is gitignored and created automatically on first run; seed data loads only when the videos table is empty.
+Everything is in `./data/content.db` (SQLite, WAL mode). The `data/` directory is gitignored and created automatically on first run; the app starts empty (only the default rolling-window setting is seeded).
 
 **Back up** by copying the `data/` directory, or use Settings → Export JSON (Import restores a snapshot, replacing current data).
 

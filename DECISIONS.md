@@ -74,3 +74,7 @@ Judgment calls made while building, per the PRD's instruction to decide and log 
 - **Expand seeds an outline** from the short's verbal hook + script rather than copying the script as-is — a long is a rewrite, not a paste.
 - **Calendar rhythm ghosts hide on the Long filter** and are only satisfied by scheduled *shorts* of the slot's type.
 - **Old export files import cleanly**: rows missing `format` take the column default (`short`); envelope stays version 1.
+
+## Empty start (owner request, 2026-07-16)
+
+- **All hardcoded seed content removed** — the PRD §8 demo videos, structures, and rhythm slots no longer ship. `seedIfEmpty` now ensures only the `rolling_average_window` setting (and keys off the `settings` table, since `videos` is legitimately empty). The live DB's demo/test rows were deleted the same day. Rhythm is configured in Settings; structures are added in Banks.
