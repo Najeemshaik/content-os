@@ -1,5 +1,5 @@
 import { asc, eq, isNull } from "drizzle-orm";
-import { db } from "@/lib/db/client";
+import { getDb } from "@/lib/db/client";
 import { getFlagContext } from "@/lib/db/flags";
 import { rhythmSlots, series, videos } from "@/lib/db/schema";
 import { PipelineBoard } from "@/components/pipeline/pipeline-board";
@@ -7,8 +7,9 @@ import type { BoardVideo } from "@/components/pipeline/video-card";
 
 export const dynamic = "force-dynamic";
 
-export default function PipelinePage() {
-  const rows = db
+export default async function PipelinePage() {
+  const db = await getDb();
+  const rows = await db
     .select({
       id: videos.id,
       title: videos.title,
@@ -28,7 +29,7 @@ export default function PipelinePage() {
     .orderBy(asc(videos.sortOrder))
     .all();
 
-  const slots = db
+  const slots = await db
     .select({
       id: rhythmSlots.id,
       weekday: rhythmSlots.weekday,
@@ -39,8 +40,8 @@ export default function PipelinePage() {
 
   // Flags are format-scoped; the board shows both formats' flames.
   const flaggedIds = new Set([
-    ...getFlagContext("short").flaggedIds,
-    ...getFlagContext("long").flaggedIds,
+    ...(await getFlagContext("short")).flaggedIds,
+    ...(await getFlagContext("long")).flaggedIds,
   ]);
   const boardVideos: BoardVideo[] = rows.map((row) => ({
     ...row,

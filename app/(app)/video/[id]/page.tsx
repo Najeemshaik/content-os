@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { asc, desc, eq } from "drizzle-orm";
-import { db } from "@/lib/db/client";
+import { getDb } from "@/lib/db/client";
 import { getFlagContext } from "@/lib/db/flags";
 import {
   outliers,
@@ -15,22 +15,23 @@ export const dynamic = "force-dynamic";
 
 export default async function VideoPage(props: PageProps<"/video/[id]">) {
   const { id } = await props.params;
-  const video = db.select().from(videos).where(eq(videos.id, id)).get();
+  const db = await getDb();
+  const video = await db.select().from(videos).where(eq(videos.id, id)).get();
   if (!video) notFound();
 
-  const seriesOptions = db
+  const seriesOptions = await db
     .select({ id: series.id, name: series.name })
     .from(series)
     .orderBy(asc(series.name))
     .all();
 
-  const allStructures = db
+  const allStructures = await db
     .select()
     .from(structures)
     .orderBy(asc(structures.name))
     .all();
 
-  const outlierHooks = db
+  const outlierHooks = await db
     .select({
       id: outliers.id,
       creator: outliers.creator,
@@ -42,7 +43,7 @@ export default async function VideoPage(props: PageProps<"/video/[id]">) {
     .from(outliers)
     .all();
 
-  const revisions = db
+  const revisions = await db
     .select()
     .from(scriptRevisions)
     .where(eq(scriptRevisions.videoId, id))
@@ -50,13 +51,13 @@ export default async function VideoPage(props: PageProps<"/video/[id]">) {
     .all();
 
   const parent = video.doubleDownOf
-    ? (db
+    ? ((await db
         .select({ id: videos.id, title: videos.title })
         .from(videos)
         .where(eq(videos.id, video.doubleDownOf))
-        .get() ?? null)
+        .get()) ?? null)
     : null;
-  const variants = db
+  const variants = await db
     .select({ id: videos.id, title: videos.title })
     .from(videos)
     .where(eq(videos.doubleDownOf, id))
@@ -65,19 +66,19 @@ export default async function VideoPage(props: PageProps<"/video/[id]">) {
   // Cross-format lineage: the video this one was clipped/expanded from, and
   // the videos derived from this one.
   const clipParent = video.clipOf
-    ? (db
+    ? ((await db
         .select({ id: videos.id, title: videos.title, format: videos.format })
         .from(videos)
         .where(eq(videos.id, video.clipOf))
-        .get() ?? null)
+        .get()) ?? null)
     : null;
-  const clips = db
+  const clips = await db
     .select({ id: videos.id, title: videos.title, format: videos.format })
     .from(videos)
     .where(eq(videos.clipOf, id))
     .all();
 
-  const { flaggedIds } = getFlagContext(video.format);
+  const { flaggedIds } = await getFlagContext(video.format);
 
   return (
     <VideoWorkspace

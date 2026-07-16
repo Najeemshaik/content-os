@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { db } from "@/lib/db/client";
+import { getDb } from "@/lib/db/client";
 import {
   outliers,
   rhythmSlots,
@@ -26,7 +26,9 @@ export async function setRollingWindow(input: unknown): Promise<ActionResult> {
     const { value } = z
       .object({ value: z.number().int().min(3).max(100) })
       .parse(input);
-    db.insert(settings)
+    const db = await getDb();
+    await db
+      .insert(settings)
       .values({ key: "rolling_average_window", value: String(value) })
       .onConflictDoUpdate({
         target: settings.key,
@@ -54,9 +56,10 @@ const rhythmSchema = z.object({
 export async function saveRhythm(input: unknown): Promise<ActionResult> {
   try {
     const { slots } = rhythmSchema.parse(input);
-    db.transaction((tx) => {
-      tx.delete(rhythmSlots).run();
-      if (slots.length > 0) tx.insert(rhythmSlots).values(slots).run();
+    const db = await getDb();
+    await db.transaction(async (tx) => {
+      await tx.delete(rhythmSlots).run();
+      if (slots.length > 0) await tx.insert(rhythmSlots).values(slots).run();
     });
     revalidatePath("/", "layout");
     return { ok: true };
@@ -82,18 +85,19 @@ export type ExportPayload = {
 
 export async function exportData(): Promise<ActionResult<ExportPayload>> {
   try {
+    const db = await getDb();
     const payload: ExportPayload = {
       app: "content-os",
       version: 1,
       exportedAt: Date.now(),
       tables: {
-        videos: db.select().from(videos).all(),
-        scriptRevisions: db.select().from(scriptRevisions).all(),
-        series: db.select().from(series).all(),
-        structures: db.select().from(structures).all(),
-        outliers: db.select().from(outliers).all(),
-        rhythmSlots: db.select().from(rhythmSlots).all(),
-        settings: db.select().from(settings).all(),
+        videos: await db.select().from(videos).all(),
+        scriptRevisions: await db.select().from(scriptRevisions).all(),
+        series: await db.select().from(series).all(),
+        structures: await db.select().from(structures).all(),
+        outliers: await db.select().from(outliers).all(),
+        rhythmSlots: await db.select().from(rhythmSlots).all(),
+        settings: await db.select().from(settings).all(),
       },
     };
     return { ok: true, data: payload };
@@ -122,31 +126,33 @@ export async function importData(input: unknown): Promise<ActionResult> {
   try {
     const data = importSchema.parse(input);
     const t = data.tables;
-    db.transaction((tx) => {
-      tx.delete(scriptRevisions).run();
-      tx.delete(videos).run();
-      tx.delete(outliers).run();
-      tx.delete(structures).run();
-      tx.delete(series).run();
-      tx.delete(rhythmSlots).run();
-      tx.delete(settings).run();
+    const db = await getDb();
+    await db.transaction(async (tx) => {
+      await tx.delete(scriptRevisions).run();
+      await tx.delete(videos).run();
+      await tx.delete(outliers).run();
+      await tx.delete(structures).run();
+      await tx.delete(series).run();
+      await tx.delete(rhythmSlots).run();
+      await tx.delete(settings).run();
       type Rows = Record<string, unknown>[];
       if (t.series.length)
-        tx.insert(series).values(t.series as Rows as never).run();
+        await tx.insert(series).values(t.series as Rows as never).run();
       if (t.structures.length)
-        tx.insert(structures).values(t.structures as Rows as never).run();
+        await tx.insert(structures).values(t.structures as Rows as never).run();
       if (t.videos.length)
-        tx.insert(videos).values(t.videos as Rows as never).run();
+        await tx.insert(videos).values(t.videos as Rows as never).run();
       if (t.scriptRevisions.length)
-        tx.insert(scriptRevisions)
+        await tx
+          .insert(scriptRevisions)
           .values(t.scriptRevisions as Rows as never)
           .run();
       if (t.outliers.length)
-        tx.insert(outliers).values(t.outliers as Rows as never).run();
+        await tx.insert(outliers).values(t.outliers as Rows as never).run();
       if (t.rhythmSlots.length)
-        tx.insert(rhythmSlots).values(t.rhythmSlots as Rows as never).run();
+        await tx.insert(rhythmSlots).values(t.rhythmSlots as Rows as never).run();
       if (t.settings.length)
-        tx.insert(settings).values(t.settings as Rows as never).run();
+        await tx.insert(settings).values(t.settings as Rows as never).run();
     });
     revalidatePath("/", "layout");
     return { ok: true };

@@ -1,5 +1,5 @@
 import { asc, isNull } from "drizzle-orm";
-import { db } from "@/lib/db/client";
+import { getDb } from "@/lib/db/client";
 import { rhythmSlots, videos } from "@/lib/db/schema";
 import {
   CalendarView,
@@ -8,8 +8,9 @@ import {
 
 export const dynamic = "force-dynamic";
 
-export default function CalendarPage() {
-  const rows: CalendarVideo[] = db
+export default async function CalendarPage() {
+  const db = await getDb();
+  const rows: CalendarVideo[] = await db
     .select({
       id: videos.id,
       title: videos.title,
@@ -23,7 +24,7 @@ export default function CalendarPage() {
     .orderBy(asc(videos.sortOrder))
     .all();
 
-  const slots = db
+  const slots = await db
     .select({
       id: rhythmSlots.id,
       weekday: rhythmSlots.weekday,

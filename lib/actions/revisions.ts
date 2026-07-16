@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
-import { db } from "@/lib/db/client";
+import { getDb } from "@/lib/db/client";
 import { scriptRevisions, videos } from "@/lib/db/schema";
 import { snapshotVideo } from "@/lib/db/revisions";
 import type { ActionResult } from "@/lib/types";
@@ -19,7 +19,7 @@ function fail(error: unknown, fallback: string): { ok: false; error: string } {
 export async function createSnapshot(input: unknown): Promise<ActionResult> {
   try {
     const { videoId } = z.object({ videoId: z.uuid() }).parse(input);
-    snapshotVideo(videoId);
+    await snapshotVideo(videoId);
     revalidatePath("/", "layout");
     return { ok: true };
   } catch (error) {
@@ -39,15 +39,17 @@ export async function restoreRevision(
 ): Promise<ActionResult<RestoredFields>> {
   try {
     const { revisionId } = z.object({ revisionId: z.uuid() }).parse(input);
-    const revision = db
+    const db = await getDb();
+    const revision = await db
       .select()
       .from(scriptRevisions)
       .where(eq(scriptRevisions.id, revisionId))
       .get();
     if (!revision) return { ok: false, error: "Revision not found" };
     // PRD §4.2: restore itself creates a snapshot first.
-    snapshotVideo(revision.videoId);
-    db.update(videos)
+    await snapshotVideo(revision.videoId);
+    await db
+      .update(videos)
       .set({
         scriptBody: revision.scriptBody,
         hookVerbal: revision.hookVerbal,

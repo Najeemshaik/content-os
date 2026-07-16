@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
-import { db } from "@/lib/db/client";
+import { getDb } from "@/lib/db/client";
 import { outliers } from "@/lib/db/schema";
 import { OUTLIER_STATUSES, type ActionResult } from "@/lib/types";
 
@@ -39,7 +39,9 @@ export async function createOutlier(
   try {
     const data = outlierFields.parse(input);
     const id = crypto.randomUUID();
-    db.insert(outliers)
+    const db = await getDb();
+    await db
+      .insert(outliers)
       .values({
         id,
         ...data,
@@ -63,7 +65,8 @@ export async function updateOutlier(input: unknown): Promise<ActionResult> {
       Object.entries(fields).filter(([, v]) => v !== undefined),
     );
     if (Object.keys(clean).length === 0) return { ok: true };
-    const existing = db
+    const db = await getDb();
+    const existing = await db
       .select()
       .from(outliers)
       .where(eq(outliers.id, id))
@@ -73,7 +76,8 @@ export async function updateOutlier(input: unknown): Promise<ActionResult> {
     const followers =
       (clean.creatorFollowers as number | null | undefined) ??
       existing.creatorFollowers;
-    db.update(outliers)
+    await db
+      .update(outliers)
       .set({ ...clean, multiplier: multiplierOf(views, followers) })
       .where(eq(outliers.id, id))
       .run();
@@ -87,7 +91,8 @@ export async function updateOutlier(input: unknown): Promise<ActionResult> {
 export async function deleteOutlier(input: unknown): Promise<ActionResult> {
   try {
     const { id } = z.object({ id: z.uuid() }).parse(input);
-    db.delete(outliers).where(eq(outliers.id, id)).run();
+    const db = await getDb();
+    await db.delete(outliers).where(eq(outliers.id, id)).run();
     revalidatePath("/", "layout");
     return { ok: true };
   } catch (error) {

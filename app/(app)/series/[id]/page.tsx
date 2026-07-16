@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { and, asc, eq, isNull } from "drizzle-orm";
-import { db } from "@/lib/db/client";
+import { getDb } from "@/lib/db/client";
 import { series, videos } from "@/lib/db/schema";
 import { SeriesDetail } from "@/components/series/series-detail";
 
@@ -10,10 +10,11 @@ export default async function SeriesDetailPage(
   props: PageProps<"/series/[id]">,
 ) {
   const { id } = await props.params;
-  const row = db.select().from(series).where(eq(series.id, id)).get();
+  const db = await getDb();
+  const row = await db.select().from(series).where(eq(series.id, id)).get();
   if (!row) notFound();
 
-  const episodes = db
+  const episodes = await db
     .select({
       id: videos.id,
       title: videos.title,

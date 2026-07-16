@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
-import { db } from "@/lib/db/client";
+import { getDb } from "@/lib/db/client";
 import { videos } from "@/lib/db/schema";
 import { snapshotVideo } from "@/lib/db/revisions";
 import {
@@ -25,8 +25,9 @@ function revalidateAll() {
   revalidatePath("/", "layout");
 }
 
-function minIdeaSortOrder(): number {
-  const row = db
+async function minIdeaSortOrder(): Promise<number> {
+  const db = await getDb();
+  const row = await db
     .select({ min: sql<number | null>`min(${videos.sortOrder})` })
     .from(videos)
     .where(and(eq(videos.status, "idea"), isNull(videos.archivedAt)))
@@ -48,8 +49,10 @@ const createVideoSchema = z.object({
 export async function createVideo(input: unknown): Promise<ActionResult> {
   try {
     const data = createVideoSchema.parse(input);
-    db.insert(videos)
-      .values({ ...data, status: "idea", sortOrder: minIdeaSortOrder() })
+    const db = await getDb();
+    await db
+      .insert(videos)
+      .values({ ...data, status: "idea", sortOrder: await minIdeaSortOrder() })
       .run();
     revalidateAll();
     return { ok: true };
@@ -67,12 +70,14 @@ const moveVideoSchema = z.object({
 export async function moveVideo(input: unknown): Promise<ActionResult> {
   try {
     const data = moveVideoSchema.parse(input);
-    const result = db
+    const db = await getDb();
+    const result = await db
       .update(videos)
       .set({ status: data.status, sortOrder: data.sortOrder })
       .where(eq(videos.id, data.id))
       .run();
-    if (result.changes === 0) return { ok: false, error: "Video not found" };
+    if (result.rowsAffected === 0)
+      return { ok: false, error: "Video not found" };
     revalidateAll();
     return { ok: true };
   } catch (error) {
@@ -110,12 +115,14 @@ export async function updateVideo(input: unknown): Promise<ActionResult> {
       Object.entries(rest).filter(([, v]) => v !== undefined),
     );
     if (Object.keys(fields).length === 0) return { ok: true };
-    const result = db
+    const db = await getDb();
+    const result = await db
       .update(videos)
       .set(fields)
       .where(eq(videos.id, id))
       .run();
-    if (result.changes === 0) return { ok: false, error: "Video not found" };
+    if (result.rowsAffected === 0)
+      return { ok: false, error: "Video not found" };
     revalidateAll();
     return { ok: true };
   } catch (error) {
@@ -131,12 +138,14 @@ const scheduleSchema = z.object({
 export async function scheduleVideo(input: unknown): Promise<ActionResult> {
   try {
     const data = scheduleSchema.parse(input);
-    const result = db
+    const db = await getDb();
+    const result = await db
       .update(videos)
       .set({ scheduledDate: data.scheduledDate })
       .where(eq(videos.id, data.id))
       .run();
-    if (result.changes === 0) return { ok: false, error: "Video not found" };
+    if (result.rowsAffected === 0)
+      return { ok: false, error: "Video not found" };
     revalidateAll();
     return { ok: true };
   } catch (error) {
@@ -147,12 +156,14 @@ export async function scheduleVideo(input: unknown): Promise<ActionResult> {
 export async function archiveVideo(input: unknown): Promise<ActionResult> {
   try {
     const { id } = z.object({ id: z.uuid() }).parse(input);
-    const result = db
+    const db = await getDb();
+    const result = await db
       .update(videos)
       .set({ archivedAt: Date.now() })
       .where(eq(videos.id, id))
       .run();
-    if (result.changes === 0) return { ok: false, error: "Video not found" };
+    if (result.rowsAffected === 0)
+      return { ok: false, error: "Video not found" };
     revalidateAll();
     return { ok: true };
   } catch (error) {
@@ -165,7 +176,8 @@ export async function advanceStatus(
 ): Promise<ActionResult<{ status: VideoStatus }>> {
   try {
     const { id } = z.object({ id: z.uuid() }).parse(input);
-    const video = db.select().from(videos).where(eq(videos.id, id)).get();
+    const db = await getDb();
+    const video = await db.select().from(videos).where(eq(videos.id, id)).get();
     if (!video) return { ok: false, error: "Video not found" };
     const index = VIDEO_STATUSES.indexOf(video.status);
     if (index >= VIDEO_STATUSES.length - 1) {
@@ -173,8 +185,9 @@ export async function advanceStatus(
     }
     const next = VIDEO_STATUSES[index + 1];
     // PRD §6: a status advance snapshots the script + hooks.
-    snapshotVideo(id);
-    db.update(videos)
+    await snapshotVideo(id);
+    await db
+      .update(videos)
       .set({
         status: next,
         ...(next === "published" ? { publishedAt: Date.now() } : {}),
@@ -198,14 +211,16 @@ export async function doubleDown(
 ): Promise<ActionResult<{ id: string }>> {
   try {
     const data = doubleDownSchema.parse(input);
-    const parent = db
+    const db = await getDb();
+    const parent = await db
       .select()
       .from(videos)
       .where(eq(videos.id, data.id))
       .get();
     if (!parent) return { ok: false, error: "Video not found" };
     const id = crypto.randomUUID();
-    db.insert(videos)
+    await db
+      .insert(videos)
       .values({
         id,
         title: `DD: ${parent.title}`,
@@ -214,7 +229,7 @@ export async function doubleDown(
         status: "idea",
         notes: data.plan,
         doubleDownOf: parent.id,
-        sortOrder: minIdeaSortOrder(),
+        sortOrder: await minIdeaSortOrder(),
       })
       .run();
     revalidateAll();
@@ -244,14 +259,16 @@ export async function clipToShort(
 ): Promise<ActionResult<{ id: string }>> {
   try {
     const data = clipToShortSchema.parse(input);
-    const parent = db
+    const db = await getDb();
+    const parent = await db
       .select()
       .from(videos)
       .where(eq(videos.id, data.id))
       .get();
     if (!parent) return { ok: false, error: "Video not found" };
     const id = crypto.randomUUID();
-    db.insert(videos)
+    await db
+      .insert(videos)
       .values({
         id,
         title: data.title ?? excerptTitle(data.excerpt),
@@ -261,7 +278,7 @@ export async function clipToShort(
         scriptBody: data.excerpt,
         notes: `Clipped from “${parent.title}”.`,
         clipOf: parent.id,
-        sortOrder: minIdeaSortOrder(),
+        sortOrder: await minIdeaSortOrder(),
       })
       .run();
     revalidateAll();
@@ -276,7 +293,8 @@ export async function expandToLong(
 ): Promise<ActionResult<{ id: string }>> {
   try {
     const { id: sourceId } = z.object({ id: z.uuid() }).parse(input);
-    const parent = db
+    const db = await getDb();
+    const parent = await db
       .select()
       .from(videos)
       .where(eq(videos.id, sourceId))
@@ -291,7 +309,8 @@ export async function expandToLong(
       .filter(Boolean)
       .join("\n\n");
     const id = crypto.randomUUID();
-    db.insert(videos)
+    await db
+      .insert(videos)
       .values({
         id,
         title: `Long: ${parent.title}`,
@@ -300,7 +319,7 @@ export async function expandToLong(
         status: "idea",
         notes: outline,
         clipOf: parent.id,
-        sortOrder: minIdeaSortOrder(),
+        sortOrder: await minIdeaSortOrder(),
       })
       .run();
     revalidateAll();

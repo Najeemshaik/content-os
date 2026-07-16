@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { eq, sql } from "drizzle-orm";
 import { z } from "zod";
-import { db } from "@/lib/db/client";
+import { getDb } from "@/lib/db/client";
 import { outliers, structures, videos } from "@/lib/db/schema";
 import { STRUCTURE_CATEGORIES, type ActionResult } from "@/lib/types";
 
@@ -32,11 +32,13 @@ export async function createStructure(
       .parse(input);
     const { outlierId, ...fields } = data;
     const id = crypto.randomUUID();
-    db.transaction((tx) => {
-      tx.insert(structures).values({ id, ...fields }).run();
+    const db = await getDb();
+    await db.transaction(async (tx) => {
+      await tx.insert(structures).values({ id, ...fields }).run();
       if (outlierId) {
         // Templatize flow: link the outlier and flip its status.
-        tx.update(outliers)
+        await tx
+          .update(outliers)
           .set({ status: "templatized", structureId: id })
           .where(eq(outliers.id, outlierId))
           .run();
@@ -59,12 +61,13 @@ export async function updateStructure(input: unknown): Promise<ActionResult> {
       Object.entries(fields).filter(([, v]) => v !== undefined),
     );
     if (Object.keys(clean).length === 0) return { ok: true };
-    const result = db
+    const db = await getDb();
+    const result = await db
       .update(structures)
       .set(clean)
       .where(eq(structures.id, id))
       .run();
-    if (result.changes === 0)
+    if (result.rowsAffected === 0)
       return { ok: false, error: "Structure not found" };
     revalidatePath("/", "layout");
     return { ok: true };
@@ -76,17 +79,20 @@ export async function updateStructure(input: unknown): Promise<ActionResult> {
 export async function deleteStructure(input: unknown): Promise<ActionResult> {
   try {
     const { id } = z.object({ id: z.uuid() }).parse(input);
-    db.transaction((tx) => {
+    const db = await getDb();
+    await db.transaction(async (tx) => {
       // Detach references (videos keep their scripts; outliers keep status).
-      tx.update(videos)
+      await tx
+        .update(videos)
         .set({ structureId: null })
         .where(eq(videos.structureId, id))
         .run();
-      tx.update(outliers)
+      await tx
+        .update(outliers)
         .set({ structureId: null })
         .where(eq(outliers.structureId, id))
         .run();
-      tx.delete(structures).where(eq(structures.id, id)).run();
+      await tx.delete(structures).where(eq(structures.id, id)).run();
     });
     revalidatePath("/", "layout");
     return { ok: true };
@@ -99,7 +105,9 @@ export async function deleteStructure(input: unknown): Promise<ActionResult> {
 export async function markStructureUsed(input: unknown): Promise<ActionResult> {
   try {
     const { id } = z.object({ id: z.uuid() }).parse(input);
-    db.update(structures)
+    const db = await getDb();
+    await db
+      .update(structures)
       .set({ timesUsed: sql`${structures.timesUsed} + 1` })
       .where(eq(structures.id, id))
       .run();
@@ -116,7 +124,8 @@ export async function createVideoFromStructure(
 ): Promise<ActionResult<{ id: string }>> {
   try {
     const { id } = z.object({ id: z.uuid() }).parse(input);
-    const structure = db
+    const db = await getDb();
+    const structure = await db
       .select()
       .from(structures)
       .where(eq(structures.id, id))
@@ -129,13 +138,14 @@ export async function createVideoFromStructure(
         : structure.category === "storytelling"
           ? "story"
           : "take";
-    db.transaction((tx) => {
-      const row = tx
+    await db.transaction(async (tx) => {
+      const row = await tx
         .select({ min: sql<number | null>`min(${videos.sortOrder})` })
         .from(videos)
         .where(eq(videos.status, "idea"))
         .get();
-      tx.insert(videos)
+      await tx
+        .insert(videos)
         .values({
           id: videoId,
           title: `${structure.name} — new video`,
@@ -146,7 +156,8 @@ export async function createVideoFromStructure(
           sortOrder: (row?.min ?? 2000) - 1000,
         })
         .run();
-      tx.update(structures)
+      await tx
+        .update(structures)
         .set({ timesUsed: sql`${structures.timesUsed} + 1` })
         .where(eq(structures.id, id))
         .run();

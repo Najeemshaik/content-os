@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { desc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
-import { db } from "@/lib/db/client";
+import { getDb } from "@/lib/db/client";
 import { series, videos } from "@/lib/db/schema";
 import {
   SERIES_STATUSES,
@@ -32,7 +32,8 @@ export async function createSeries(
   try {
     const data = seriesFields.parse(input);
     const id = crypto.randomUUID();
-    db.insert(series).values({ id, ...data }).run();
+    const db = await getDb();
+    await db.insert(series).values({ id, ...data }).run();
     revalidatePath("/", "layout");
     return { ok: true, data: { id } };
   } catch (error) {
@@ -50,12 +51,14 @@ export async function updateSeries(input: unknown): Promise<ActionResult> {
       Object.entries(fields).filter(([, v]) => v !== undefined),
     );
     if (Object.keys(clean).length === 0) return { ok: true };
-    const result = db
+    const db = await getDb();
+    const result = await db
       .update(series)
       .set(clean)
       .where(eq(series.id, id))
       .run();
-    if (result.changes === 0) return { ok: false, error: "Series not found" };
+    if (result.rowsAffected === 0)
+      return { ok: false, error: "Series not found" };
     revalidatePath("/", "layout");
     return { ok: true };
   } catch (error) {
@@ -66,12 +69,14 @@ export async function updateSeries(input: unknown): Promise<ActionResult> {
 export async function deleteSeries(input: unknown): Promise<ActionResult> {
   try {
     const { id } = z.object({ id: z.uuid() }).parse(input);
-    db.transaction((tx) => {
-      tx.update(videos)
+    const db = await getDb();
+    await db.transaction(async (tx) => {
+      await tx
+        .update(videos)
         .set({ seriesId: null, episodeNumber: null })
         .where(eq(videos.seriesId, id))
         .run();
-      tx.delete(series).where(eq(series.id, id)).run();
+      await tx.delete(series).where(eq(series.id, id)).run();
     });
     revalidatePath("/", "layout");
     return { ok: true };
@@ -87,13 +92,14 @@ export async function addNextEpisode(
 ): Promise<ActionResult<{ id: string; episodeNumber: number }>> {
   try {
     const { seriesId } = z.object({ seriesId: z.uuid() }).parse(input);
-    const parent = db
+    const db = await getDb();
+    const parent = await db
       .select()
       .from(series)
       .where(eq(series.id, seriesId))
       .get();
     if (!parent) return { ok: false, error: "Series not found" };
-    const latest = db
+    const latest = await db
       .select({
         episodeNumber: videos.episodeNumber,
         type: videos.type,
@@ -104,12 +110,13 @@ export async function addNextEpisode(
       .get();
     const episodeNumber = (latest?.episodeNumber ?? 0) + 1;
     const id = crypto.randomUUID();
-    const row = db
+    const row = await db
       .select({ min: sql<number | null>`min(${videos.sortOrder})` })
       .from(videos)
       .where(eq(videos.status, "idea"))
       .get();
-    db.insert(videos)
+    await db
+      .insert(videos)
       .values({
         id,
         title: `${parent.name} — episode ${episodeNumber}`,

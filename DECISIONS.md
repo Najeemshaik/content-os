@@ -75,6 +75,15 @@ Judgment calls made while building, per the PRD's instruction to decide and log 
 - **Calendar rhythm ghosts hide on the Long filter** and are only satisfied by scheduled *shorts* of the slot's type.
 - **Old export files import cleanly**: rows missing `format` take the column default (`short`); envelope stays version 1.
 
+## Cloud deployment (owner request, 2026-07-16)
+
+- **Driver: better-sqlite3 → libSQL (`@libsql/client`)** so the same code runs against a local `file:` database (no env vars, zero-setup dev preserved) and hosted Turso in production (`TURSO_DATABASE_URL`/`TURSO_AUTH_TOKEN`). Stays SQLite-dialect, so schema, migrations, and queries carried over; the API is async, so `lib/db/client.ts` now exports `getDb(): Promise<Db>` (migrate+seed run once behind a cached promise) and `RunResult.changes` became `ResultSet.rowsAffected`.
+- **Migrations still apply at runtime** on cold start; `outputFileTracingIncludes` ships `lib/db/migrations/` into the serverless bundle.
+- **Auth is a single password** (`APP_PASSWORD`) checked by `proxy.ts` (Next 16's renamed middleware) against a static HMAC session cookie (`lib/auth.ts`, Web Crypto so it runs on any runtime). No user table, no auth library — single-user app. Unset password = auth disabled (local dev). Rotate sessions by changing `AUTH_SECRET`.
+- **`/login` lives outside the `(app)` route group**, which now owns the sidebar/overlay shell; the root layout is chrome-free.
+- **PWA over native app**: `app/manifest.ts` + icons; installed via Add to Home Screen. One codebase for web and phone.
+- **No local↔cloud sync** — one source of truth (Turso when deployed). Export/Import JSON is the migration path and the backup story.
+
 ## Empty start (owner request, 2026-07-16)
 
 - **All hardcoded seed content removed** — the PRD §8 demo videos, structures, and rhythm slots no longer ship. `seedIfEmpty` now ensures only the `rolling_average_window` setting (and keys off the `settings` table, since `videos` is legitimately empty). The live DB's demo/test rows were deleted the same day. Rhythm is configured in Settings; structures are added in Banks.

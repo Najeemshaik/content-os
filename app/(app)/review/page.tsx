@@ -1,5 +1,5 @@
 import { and, desc, eq, isNull } from "drizzle-orm";
-import { db } from "@/lib/db/client";
+import { getDb } from "@/lib/db/client";
 import { getFlagContext } from "@/lib/db/flags";
 import { videos } from "@/lib/db/schema";
 import {
@@ -19,8 +19,9 @@ const HEALTH_METRIC: Record<VideoType, "saves" | "shares" | "comments"> = {
   story: "comments",
 };
 
-export default function ReviewPage() {
-  const published = db
+export default async function ReviewPage() {
+  const db = await getDb();
+  const published = await db
     .select()
     .from(videos)
     .where(and(eq(videos.status, "published"), isNull(videos.archivedAt)))
@@ -32,7 +33,7 @@ export default function ReviewPage() {
   const stats = {} as Record<VideoFormat, FormatStats>;
   const flaggedIds = new Set<string>();
   for (const format of VIDEO_FORMATS) {
-    const context = getFlagContext(format);
+    const context = await getFlagContext(format);
     const ofFormat = published.filter((v) => v.format === format);
     stats[format] = {
       average: context.average,

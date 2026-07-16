@@ -1,6 +1,6 @@
 import "server-only";
 import { and, desc, eq, isNull, isNotNull } from "drizzle-orm";
-import { db } from "./client";
+import { getDb } from "./client";
 import { settings, videos } from "./schema";
 import type { VideoFormat } from "@/lib/types";
 
@@ -12,8 +12,9 @@ export type FlagContext = {
   flaggedIds: Set<string>;
 };
 
-export function getRollingWindow(): number {
-  const row = db
+export async function getRollingWindow(): Promise<number> {
+  const db = await getDb();
+  const row = await db
     .select({ value: settings.value })
     .from(settings)
     .where(eq(settings.key, "rolling_average_window"))
@@ -24,9 +25,12 @@ export function getRollingWindow(): number {
 
 // Baselines are format-scoped: a short is only ever compared against other
 // shorts, a long against other longs.
-export function getFlagContext(format: VideoFormat): FlagContext {
-  const windowSize = getRollingWindow();
-  const published = db
+export async function getFlagContext(
+  format: VideoFormat,
+): Promise<FlagContext> {
+  const db = await getDb();
+  const windowSize = await getRollingWindow();
+  const published = await db
     .select({ id: videos.id, views: videos.views })
     .from(videos)
     .where(
