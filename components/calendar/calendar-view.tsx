@@ -27,7 +27,13 @@ import {
   startOfMonth,
   startOfWeek,
 } from "date-fns";
-import { CalendarOff, ChevronLeft, ChevronRight, TriangleAlert } from "lucide-react";
+import {
+  CalendarOff,
+  ChevronLeft,
+  ChevronRight,
+  Plus,
+  TriangleAlert,
+} from "lucide-react";
 import { toast } from "sonner";
 import { createVideo, scheduleVideo } from "@/lib/actions/videos";
 import { cn } from "@/lib/utils";
@@ -75,34 +81,80 @@ const STATUS_RANK: Record<VideoStatus, number> = {
   published: 3,
 };
 
+const ACCENTS: Record<VideoType, { bar: string; text: string }> = {
+  take: { bar: "bg-take", text: "text-take" },
+  teach: { bar: "bg-teach", text: "text-teach" },
+  story: { bar: "bg-story", text: "text-story" },
+};
+
 function iso(date: Date) {
   return format(date, "yyyy-MM-dd");
 }
 
-/* ── Draggable chip ─────────────────────────────────────────── */
+function isOverdue(video: CalendarVideo, today: string) {
+  return (
+    !!video.scheduledDate &&
+    video.scheduledDate < today &&
+    video.status !== "published"
+  );
+}
 
-function VideoChip({
+/* ── Chips (draggable) ──────────────────────────────────────── */
+
+function WeekChip({
   video,
   today,
-  compact,
 }: {
   video: CalendarVideo;
   today: string;
-  compact?: boolean;
 }) {
-  const overdue =
-    !!video.scheduledDate &&
-    video.scheduledDate < today &&
-    video.status !== "published";
+  const overdue = isOverdue(video, today);
+  const accent = ACCENTS[video.type];
+  return (
+    <div className="relative overflow-hidden rounded-lg bg-card py-2 pr-2.5 pl-3 shadow-card transition-shadow hover:shadow-card-hover">
+      <span
+        className={cn("absolute inset-y-0 left-0 w-0.5", accent.bar)}
+        aria-hidden
+      />
+      <div className="flex items-center gap-1.5">
+        <span
+          className={cn(
+            "text-2xs leading-none font-semibold tracking-widest uppercase",
+            accent.text,
+          )}
+        >
+          {video.type}
+        </span>
+        {overdue && (
+          <span className="inline-flex items-center gap-1 text-2xs leading-none font-medium text-destructive">
+            <TriangleAlert className="size-3" aria-hidden />
+            overdue
+          </span>
+        )}
+      </div>
+      <p className="mt-1 line-clamp-2 text-xs leading-snug font-medium">
+        {video.title}
+      </p>
+    </div>
+  );
+}
+
+function MonthChip({
+  video,
+  today,
+}: {
+  video: CalendarVideo;
+  today: string;
+}) {
+  const overdue = isOverdue(video, today);
   return (
     <span
       className={cn(
-        "flex w-full min-w-0 items-center gap-1.5 rounded-lg bg-card px-2 py-1.5 text-xs shadow-card transition-shadow hover:shadow-card-hover",
-        compact && "py-1",
+        "flex w-full min-w-0 items-center gap-1.5 rounded-md bg-card px-1.5 py-1 text-xs shadow-card",
         overdue && "text-destructive",
       )}
     >
-      <TypeDot type={video.type} />
+      <TypeDot type={video.type} className="size-1.5" />
       {overdue && (
         <TriangleAlert className="size-3 shrink-0" aria-label="Overdue" />
       )}
@@ -114,11 +166,11 @@ function VideoChip({
 function DraggableVideo({
   video,
   today,
-  compact,
+  variant,
 }: {
   video: CalendarVideo;
   today: string;
-  compact?: boolean;
+  variant: "week" | "month";
 }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: video.id,
@@ -138,19 +190,126 @@ function DraggableVideo({
         isDragging && "opacity-40",
       )}
     >
-      <VideoChip video={video} today={today} compact={compact} />
+      {variant === "week" ? (
+        <WeekChip video={video} today={today} />
+      ) : (
+        <MonthChip video={video} today={today} />
+      )}
     </div>
   );
 }
 
-/* ── Day cell ───────────────────────────────────────────────── */
+function GhostSlot({
+  slot,
+  compact,
+}: {
+  slot: CalendarRhythmSlot;
+  compact?: boolean;
+}) {
+  return (
+    <span
+      className={cn(
+        "flex items-center gap-1.5 rounded-lg border border-dashed border-border/80 px-2.5 text-xs text-muted-foreground/70 capitalize",
+        compact ? "py-0.5" : "py-1.5",
+      )}
+    >
+      <TypeDot type={slot.type} className="size-1.5 opacity-50" />
+      {slot.type} due
+    </span>
+  );
+}
 
-function DayCell({
+/* ── Week day column ────────────────────────────────────────── */
+
+function WeekDayColumn({
   date,
   today,
   videos,
   ghosts,
-  compact,
+  onPeek,
+}: {
+  date: Date;
+  today: string;
+  videos: CalendarVideo[];
+  ghosts: CalendarRhythmSlot[];
+  onPeek: (date: string) => void;
+}) {
+  const dateIso = iso(date);
+  const { setNodeRef, isOver } = useDroppable({ id: `day-${dateIso}` });
+  const isToday = dateIso === today;
+
+  return (
+    <section
+      aria-label={`${format(date, "EEEE MMM d")}, ${videos.length} scheduled`}
+      className={cn(
+        "group flex min-h-40 min-w-0 flex-col rounded-2xl bg-muted/50 transition-colors",
+        isToday && "bg-accent/70",
+        isOver && "bg-accent",
+      )}
+    >
+      <header className="flex items-baseline gap-1.5 px-3 pt-3 pb-2">
+        <span
+          className={cn(
+            "text-xs font-semibold tracking-widest uppercase",
+            isToday ? "text-foreground" : "text-muted-foreground/70",
+          )}
+        >
+          {format(date, "EEE")}
+        </span>
+        <span
+          className={cn(
+            "text-xs tabular-nums",
+            isToday
+              ? "font-semibold text-foreground"
+              : "text-muted-foreground/70",
+          )}
+        >
+          {format(date, "d")}
+        </span>
+        {isToday && (
+          <span className="ms-auto rounded-full bg-primary px-1.5 py-0.5 text-2xs leading-none font-semibold tracking-wide text-primary-foreground uppercase">
+            Today
+          </span>
+        )}
+      </header>
+      <div
+        ref={setNodeRef}
+        role="button"
+        tabIndex={0}
+        aria-label={`Open ${format(date, "EEEE MMM d")}`}
+        onClick={() => onPeek(dateIso)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") onPeek(dateIso);
+        }}
+        className="flex min-h-0 flex-1 cursor-default flex-col gap-1.5 px-2 pb-2 outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        {videos.map((video) => (
+          <DraggableVideo
+            key={video.id}
+            video={video}
+            today={today}
+            variant="week"
+          />
+        ))}
+        {ghosts.map((slot) => (
+          <GhostSlot key={slot.id} slot={slot} />
+        ))}
+        <span className="flex items-center justify-center gap-1 rounded-lg py-1.5 text-xs text-muted-foreground opacity-0 transition-opacity group-hover:opacity-70">
+          <Plus className="size-3" aria-hidden />
+          Add
+        </span>
+      </div>
+    </section>
+  );
+}
+
+/* ── Month day cell ─────────────────────────────────────────── */
+
+function MonthDayCell({
+  date,
+  today,
+  videos,
+  ghosts,
   outsideMonth,
   onPeek,
 }: {
@@ -158,14 +317,13 @@ function DayCell({
   today: string;
   videos: CalendarVideo[];
   ghosts: CalendarRhythmSlot[];
-  compact?: boolean;
-  outsideMonth?: boolean;
+  outsideMonth: boolean;
   onPeek: (date: string) => void;
 }) {
   const dateIso = iso(date);
   const { setNodeRef, isOver } = useDroppable({ id: `day-${dateIso}` });
   const isToday = dateIso === today;
-  const shown = compact ? videos.slice(0, 3) : videos;
+  const shown = videos.slice(0, 3);
 
   return (
     <div
@@ -178,59 +336,36 @@ function DayCell({
       }}
       aria-label={`${format(date, "EEEE MMM d")}, ${videos.length} scheduled`}
       className={cn(
-        "flex min-h-24 flex-col gap-1.5 rounded-xl bg-muted/40 p-2 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring",
-        compact ? "min-h-24" : "min-h-96",
-        isToday && "bg-accent/60",
+        "flex min-h-28 flex-col gap-1 rounded-xl bg-muted/50 p-1.5 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring",
+        isToday && "bg-accent/70",
         isOver && "bg-accent",
         outsideMonth && "opacity-40",
       )}
     >
-      <div
+      <span
         className={cn(
-          "flex items-center justify-between px-0.5",
-          // Week view gets an external header row on large screens.
-          !compact && "lg:hidden",
+          "px-1 text-xs font-medium tabular-nums text-muted-foreground",
+          isToday &&
+            "flex size-5 items-center justify-center rounded-full bg-primary px-0 font-semibold text-primary-foreground",
         )}
       >
-        <span
-          className={cn(
-            "text-xs font-medium tabular-nums text-muted-foreground",
-            isToday &&
-              "flex size-5 items-center justify-center rounded-full bg-primary font-semibold text-primary-foreground",
-          )}
-        >
-          {format(date, "d")}
-        </span>
-        {!compact && (
-          <span className="text-xs text-muted-foreground/70">
-            {format(date, "EEE")}
-          </span>
-        )}
-      </div>
+        {format(date, "d")}
+      </span>
       {shown.map((video) => (
         <DraggableVideo
           key={video.id}
           video={video}
           today={today}
-          compact={compact}
+          variant="month"
         />
       ))}
-      {compact && videos.length > shown.length && (
-        <span className="px-1 text-xs text-muted-foreground">
+      {videos.length > shown.length && (
+        <span className="px-1.5 text-xs text-muted-foreground">
           +{videos.length - shown.length} more
         </span>
       )}
       {ghosts.map((slot) => (
-        <span
-          key={slot.id}
-          className={cn(
-            "flex items-center gap-1.5 rounded-lg border border-dashed border-border/80 px-2 py-1 text-xs text-muted-foreground/70 capitalize",
-            compact && "py-0.5",
-          )}
-        >
-          <TypeDot type={slot.type} className="opacity-40" />
-          {slot.type} due
-        </span>
+        <GhostSlot key={slot.id} slot={slot} compact />
       ))}
     </div>
   );
@@ -353,7 +488,7 @@ export function CalendarView({
   const peekVideos = peekDate ? (byDate.get(peekDate) ?? []) : [];
 
   return (
-    <div className="mx-auto flex min-h-svh w-full max-w-9xl flex-col gap-5 p-5 md:px-8 md:py-6">
+    <div className="mx-auto flex min-h-svh w-full max-w-9xl flex-col gap-5 p-5 md:h-svh md:px-8 md:py-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-xl font-semibold tracking-tight">Calendar</h1>
         <div className="flex flex-wrap items-center gap-2">
@@ -364,6 +499,7 @@ export function CalendarView({
             }
             variant="outline"
             size="sm"
+            spacing={0}
             aria-label="Calendar view"
           >
             <ToggleGroupItem value="week">Week</ToggleGroupItem>
@@ -415,62 +551,29 @@ export function CalendarView({
         onDragEnd={handleDragEnd}
         onDragCancel={() => setActiveId(null)}
       >
-        <div className="flex flex-1 flex-col gap-5 lg:flex-row">
-          <div className="min-w-0 flex-1">
-            {view === "week" ? (
-              <div className="flex flex-col gap-2">
-                <div className="hidden grid-cols-7 gap-2 lg:grid">
-                  {days.map((day) => {
-                    const isToday = iso(day) === today;
-                    return (
-                      <div
-                        key={iso(day)}
-                        className={cn(
-                          "flex items-baseline gap-1.5 px-2",
-                          isToday ? "text-foreground" : "text-muted-foreground/70",
-                        )}
-                      >
-                        <span className="text-xs font-semibold tracking-widest uppercase">
-                          {format(day, "EEE")}
-                        </span>
-                        <span
-                          className={cn(
-                            "text-xs tabular-nums",
-                            isToday && "font-semibold",
-                          )}
-                        >
-                          {format(day, "d")}
-                        </span>
-                        {isToday && (
-                          <span className="text-2xs font-medium tracking-wide text-muted-foreground uppercase">
-                            Today
-                          </span>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-                <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-7">
-                  {days.map((day) => (
-                    <DayCell
-                      key={iso(day)}
-                      date={day}
-                      today={today}
-                      videos={byDate.get(iso(day)) ?? []}
-                      ghosts={ghostsFor(day)}
-                      onPeek={setPeekDate}
-                    />
-                  ))}
-                </div>
-              </div>
-            ) : (
+        <div className="flex flex-1 flex-col gap-4 md:min-h-0 lg:flex-row">
+          {view === "week" ? (
+            <div className="grid min-h-0 flex-1 grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-7 lg:overflow-y-auto">
+              {days.map((day) => (
+                <WeekDayColumn
+                  key={iso(day)}
+                  date={day}
+                  today={today}
+                  videos={byDate.get(iso(day)) ?? []}
+                  ghosts={ghostsFor(day)}
+                  onPeek={setPeekDate}
+                />
+              ))}
+            </div>
+          ) : (
+            <div className="min-h-0 flex-1 lg:overflow-y-auto">
               <div className="flex flex-col gap-2">
                 <div className="hidden grid-cols-7 gap-2 lg:grid">
                   {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map(
                     (d) => (
                       <span
                         key={d}
-                        className="px-2 text-xs font-medium tracking-widest text-muted-foreground/70 uppercase"
+                        className="px-2 text-xs font-semibold tracking-widest text-muted-foreground/70 uppercase"
                       >
                         {d}
                       </span>
@@ -479,52 +582,68 @@ export function CalendarView({
                 </div>
                 <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-7">
                   {days.map((day) => (
-                    <DayCell
+                    <MonthDayCell
                       key={iso(day)}
                       date={day}
                       today={today}
                       videos={byDate.get(iso(day)) ?? []}
                       ghosts={ghostsFor(day)}
-                      compact
                       outsideMonth={!isSameMonth(day, anchor)}
                       onPeek={setPeekDate}
                     />
                   ))}
                 </div>
               </div>
-            )}
-          </div>
+            </div>
+          )}
 
           <aside
-            ref={setTrayRef}
             aria-label="Unscheduled videos"
             className={cn(
-              "flex w-full shrink-0 flex-col gap-2 rounded-2xl bg-muted/50 p-3 transition-colors lg:w-72",
+              "flex w-full shrink-0 flex-col rounded-2xl bg-muted/50 transition-colors lg:h-full lg:min-h-0 lg:w-72",
               trayOver && "bg-accent",
             )}
           >
-            <div className="flex items-center justify-between px-1 pb-1">
-              <h2 className="text-sm font-medium">Unscheduled</h2>
+            <header className="flex items-center justify-between px-4 pt-3.5 pb-2">
+              <h2 className="text-sm font-semibold tracking-tight">
+                Unscheduled
+              </h2>
               <span className="rounded-full bg-background px-2 py-0.5 text-xs font-medium tabular-nums text-muted-foreground shadow-xs">
                 {tray.length}
               </span>
+            </header>
+            <div
+              ref={setTrayRef}
+              className="flex min-h-24 flex-1 flex-col gap-1.5 px-2 pb-2 lg:min-h-0 lg:overflow-y-auto"
+            >
+              {tray.map((video) => (
+                <DraggableVideo
+                  key={video.id}
+                  video={video}
+                  today={today}
+                  variant="week"
+                />
+              ))}
+              {tray.length === 0 && (
+                <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-border/70 px-4 py-8 text-center">
+                  <CalendarOff
+                    className="size-4 text-muted-foreground/40"
+                    aria-hidden
+                  />
+                  <p className="text-xs leading-relaxed text-muted-foreground/80">
+                    Everything&apos;s scheduled. Drag a card here to
+                    unschedule it.
+                  </p>
+                </div>
+              )}
             </div>
-            {tray.map((video) => (
-              <DraggableVideo key={video.id} video={video} today={today} />
-            ))}
-            {tray.length === 0 && (
-              <p className="flex items-center gap-2 px-2 py-4 text-xs leading-relaxed text-muted-foreground/80">
-                <CalendarOff className="size-3.5 shrink-0" aria-hidden />
-                Everything&apos;s scheduled. Drag a card here to unschedule it.
-              </p>
-            )}
           </aside>
         </div>
 
         <DragOverlay>
           {activeVideo && (
-            <div className="w-64">
-              <VideoChip video={activeVideo} today={today} />
+            <div className="w-60">
+              <WeekChip video={activeVideo} today={today} />
             </div>
           )}
         </DragOverlay>
