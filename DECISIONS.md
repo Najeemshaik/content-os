@@ -84,6 +84,14 @@ Judgment calls made while building, per the PRD's instruction to decide and log 
 - **PWA over native app**: `app/manifest.ts` + icons; installed via Add to Home Screen. One codebase for web and phone.
 - **No local↔cloud sync** — one source of truth (Turso when deployed). Export/Import JSON is the migration path and the backup story.
 
+## Mobile pass (owner request, 2026-07-16)
+
+- **Bottom tab bar replaces the top icon strip** — Pipeline, Calendar, a raised capture button (dispatches the existing `content-os:capture` event), Review, and a "More" sheet holding Banks/Series/Settings + theme. Fixed, blurred, safe-area padded; `(app)` layout pads `main` to clear it. Phones navigate with thumbs, not eyebrows.
+- **Pipeline shows one stage at a time on phones** behind segmented tabs with live counts; the four-column grid starts at `md`. Cross-column drag isn't available on phones — stage changes happen in the workspace (Details select / advance button), which is the natural phone flow anyway.
+- **Calendar week is a vertical agenda below `sm`** (stacked day sections, touch-visible "+ Add"); **month is always a true 7-column grid** with dot-only chips and no ghost slots below `lg` (48px cells carry dots, not words).
+- **PWA chrome**: `viewportFit: "cover"` + light/dark `themeColor` so the installed app's status bar matches the canvas.
+- Verified via Playwright at 390×844 (iPhone-ish) against dev and the live production deployment — the extension-driven Chrome window can't shrink below desktop widths.
+
 ## Empty start (owner request, 2026-07-16)
 
 - **All hardcoded seed content removed** — the PRD §8 demo videos, structures, and rhythm slots no longer ship. `seedIfEmpty` now ensures only the `rolling_average_window` setting (and keys off the `settings` table, since `videos` is legitimately empty). The live DB's demo/test rows were deleted the same day. Rhythm is configured in Settings; structures are added in Banks.
