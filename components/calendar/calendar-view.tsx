@@ -7,7 +7,8 @@ import {
   DndContext,
   DragOverlay,
   KeyboardSensor,
-  PointerSensor,
+  MouseSensor,
+  TouchSensor,
   useDraggable,
   useDroppable,
   useSensor,
@@ -207,18 +208,14 @@ function DraggableVideo({
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: video.id,
   });
-  const router = useRouter();
   return (
     <div
       ref={setNodeRef}
       {...attributes}
       {...listeners}
-      onClick={(e) => {
-        e.stopPropagation();
-        if (!isDragging) router.push(`/video/${video.id}`);
-      }}
+      onClick={(e) => e.stopPropagation()}
       className={cn(
-        "cursor-grab rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        "relative cursor-grab rounded-lg outline-none transition-transform focus-visible:ring-2 focus-visible:ring-ring active:scale-[0.985] motion-reduce:transition-none",
         isDragging && "opacity-40",
       )}
     >
@@ -227,6 +224,14 @@ function DraggableVideo({
       ) : (
         <MonthChip video={video} today={today} />
       )}
+      <Link
+        href={`/video/${video.id}`}
+        aria-label={video.title}
+        className="absolute inset-0"
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") e.stopPropagation();
+        }}
+      />
     </div>
   );
 }
@@ -427,7 +432,11 @@ export function CalendarView({
   const today = iso(new Date());
 
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    // Touch drags require press-and-hold so taps open things reliably.
+    useSensor(MouseSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(TouchSensor, {
+      activationConstraint: { delay: 250, tolerance: 8 },
+    }),
     useSensor(KeyboardSensor),
   );
 

@@ -30,6 +30,7 @@ import {
 import { createSnapshot } from "@/lib/actions/revisions";
 import { markStructureUsed } from "@/lib/actions/structures";
 import { runtimeLabel, wordCount } from "@/lib/script";
+import { parseScenes } from "@/lib/scenes";
 import {
   VIDEO_FORMATS,
   VIDEO_TYPES,
@@ -64,6 +65,8 @@ import { cn } from "@/lib/utils";
 import { FormatBadge, TypeBadge } from "@/components/pipeline/type-badge";
 import { HookStack } from "./hook-stack";
 import { RevisionSheet } from "./revision-sheet";
+import { ScriptEditor, type ScriptEditorHandle } from "./script-editor";
+import { ShotPlan } from "./shot-plan";
 import { SaveIndicator, type SaveState } from "./save-indicator";
 import { TemplatePicker } from "./template-picker";
 
@@ -170,6 +173,7 @@ export function VideoWorkspace({
   const [deleteOpen, setDeleteOpen] = React.useState(false);
   const [advancing, startAdvance] = React.useTransition();
   const scriptRef = React.useRef<HTMLTextAreaElement>(null);
+  const editorRef = React.useRef<ScriptEditorHandle>(null);
   const [selection, setSelection] = React.useState<{
     start: number;
     end: number;
@@ -416,10 +420,14 @@ export function VideoWorkspace({
 
   const words = wordCount(state.scriptBody);
   const advanceLabel = ADVANCE_LABELS[state.status];
+  const scenes = React.useMemo(
+    () => parseScenes(state.scriptBody),
+    [state.scriptBody],
+  );
 
   return (
     <div
-      className="mx-auto flex w-full max-w-6xl flex-col gap-6 p-5 md:px-8 md:py-6"
+      className="mx-auto flex w-full max-w-6xl animate-in flex-col gap-6 p-5 duration-300 fade-in slide-in-from-bottom-2 md:px-8 md:py-6"
       onBlur={() => void flushSave()}
     >
       {/* ── Header ─────────────────────────────────────────────── */}
@@ -550,28 +558,21 @@ export function VideoWorkspace({
                 {words} {words === 1 ? "word" : "words"} · {runtimeLabel(words)}
               </span>
             </div>
-            <Textarea
-              ref={scriptRef}
+            <ScriptEditor
               value={state.scriptBody}
-              onChange={(e) => {
-                patch({ scriptBody: e.target.value }, { snapshotRelevant: true });
-                syncSelection();
+              scenes={scenes}
+              onChange={(v) =>
+                patch({ scriptBody: v }, { snapshotRelevant: true })
+              }
+              onSelectionSync={syncSelection}
+              onCmdShiftS={() => {
+                if (state.format === "long") clip();
               }}
-              onSelect={syncSelection}
-              onKeyDown={(e) => {
-                if (
-                  (e.metaKey || e.ctrlKey) &&
-                  e.shiftKey &&
-                  e.key.toLowerCase() === "s"
-                ) {
-                  e.preventDefault();
-                  if (state.format === "long") clip();
-                }
-              }}
-              placeholder="Write the script. Verbal hook first — say it like you'd say it on camera."
-              aria-label="Script"
-              className="field-sizing-content max-h-none min-h-[55svh] w-full resize-none rounded-none border-0 bg-transparent px-5 py-5 !text-base leading-7 shadow-none focus-visible:ring-0 md:px-8 dark:bg-transparent"
-              style={{ maxWidth: "72ch" }}
+              textareaRef={scriptRef}
+              handleRef={editorRef}
+              placeholder={
+                "Write the script. Verbal hook first — say it like you'd say it on camera.\nType /interview, /broll, /talking-head… to mark scenes for the shot plan."
+              }
             />
           </section>
 
@@ -754,6 +755,11 @@ export function VideoWorkspace({
               </Button>
             </div>
           </section>
+
+          <ShotPlan
+            scenes={scenes}
+            onJump={(index) => editorRef.current?.jumpToScene(index)}
+          />
 
           <section className="rounded-2xl bg-card p-4 shadow-card">
             <h2 className="mb-3 text-sm font-semibold tracking-tight">

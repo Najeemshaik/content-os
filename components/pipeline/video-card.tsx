@@ -7,6 +7,7 @@ import {
   Archive,
   ArrowRight,
   CalendarDays,
+  Clapperboard,
   Copy,
   Ellipsis,
   Film,
@@ -63,6 +64,8 @@ export type BoardVideo = {
   episodeNumber: number | null;
   doubleDownOf: string | null;
   clipOf: string | null;
+  sceneCount: number;
+  shotTypeCount: number;
   flagged: boolean;
 };
 
@@ -133,12 +136,23 @@ export function VideoCardContent({ video }: { video: BoardVideo }) {
           // let every other key (board shortcuts) bubble.
           if (e.key === "Enter" || e.key === " ") e.stopPropagation();
         }}
-        className="mt-2 line-clamp-3 block text-sm leading-snug font-medium text-card-foreground focus-visible:underline focus-visible:outline-none"
+        // Stretched link: the whole card surface opens the workspace.
+        className="mt-2 line-clamp-3 block text-sm leading-snug font-medium text-card-foreground after:absolute after:inset-0 focus-visible:underline focus-visible:outline-none"
       >
         {video.title}
       </Link>
-      {(video.seriesName || video.scheduledDate) && (
+      {(video.seriesName || video.scheduledDate || video.sceneCount > 0) && (
         <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+          {video.sceneCount > 0 && (
+            <span
+              className="inline-flex items-center gap-1"
+              title={`${video.sceneCount} scenes across ${video.shotTypeCount} shot types`}
+            >
+              <Clapperboard className="size-3" aria-hidden />
+              {video.sceneCount} · {video.shotTypeCount}{" "}
+              {video.shotTypeCount === 1 ? "shot type" : "shot types"}
+            </span>
+          )}
           {video.seriesName && (
             <span className="inline-flex min-w-0 items-center gap-1">
               <ListVideo className="size-3 shrink-0" aria-hidden />
@@ -175,8 +189,9 @@ function CardMenu({
         // Keep the click from opening the workspace or lifting the card.
         onClick={(e: React.MouseEvent) => e.stopPropagation()}
         onPointerDown={(e: React.PointerEvent) => e.stopPropagation()}
+        onTouchStart={(e: React.TouchEvent) => e.stopPropagation()}
         onKeyDown={(e: React.KeyboardEvent) => e.stopPropagation()}
-        className="absolute top-2 right-2 flex size-6 items-center justify-center rounded-md text-muted-foreground transition-opacity hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100 data-[popup-open]:bg-accent data-[popup-open]:opacity-100"
+        className="absolute top-2 right-2 z-10 flex size-6 items-center justify-center rounded-md text-muted-foreground transition-opacity hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100 data-[popup-open]:bg-accent data-[popup-open]:opacity-100"
       >
         <Ellipsis className="size-4" aria-hidden />
       </DropdownMenuTrigger>
@@ -228,11 +243,12 @@ function CardMenu({
 
 export function SortableVideoCard({
   video,
-  onOpen,
+  blockClicks,
   onAction,
 }: {
   video: BoardVideo;
-  onOpen: () => void;
+  /** True right after a drag — suppresses the post-drop click. */
+  blockClicks?: () => boolean;
   onAction: (action: CardAction) => void;
 }) {
   const {
@@ -250,9 +266,14 @@ export function SortableVideoCard({
       style={{ transform: CSS.Transform.toString(transform), transition }}
       {...attributes}
       {...listeners}
-      onClick={onOpen}
+      onClickCapture={(e) => {
+        if (blockClicks?.()) {
+          e.preventDefault();
+          e.stopPropagation();
+        }
+      }}
       className={cn(
-        "group relative cursor-grab rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none",
+        "group relative cursor-grab rounded-xl outline-none transition-transform focus-visible:ring-2 focus-visible:ring-ring active:scale-[0.985] motion-reduce:transition-none",
         isDragging && "opacity-40",
       )}
     >

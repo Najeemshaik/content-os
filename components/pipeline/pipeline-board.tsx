@@ -1,13 +1,13 @@
 "use client";
 
 import * as React from "react";
-import { useRouter } from "next/navigation";
 import {
   closestCorners,
   DndContext,
   DragOverlay,
   KeyboardSensor,
-  PointerSensor,
+  MouseSensor,
+  TouchSensor,
   useSensor,
   useSensors,
   type DragEndEvent,
@@ -89,7 +89,6 @@ export function PipelineBoard({
   initialVideos: BoardVideo[];
   rhythmSlots: WeekRhythmSlot[];
 }) {
-  const router = useRouter();
   // Board state is authoritative for the session; server actions persist in
   // the background and we revert to a snapshot + toast on failure.
   const [videos, setVideos] = React.useState(initialVideos);
@@ -112,8 +111,13 @@ export function PipelineBoard({
   const [, startTransition] = React.useTransition();
 
   const sensors = useSensors(
-    // The distance constraint lets plain clicks open the workspace.
-    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    // Mouse: a 6px threshold separates clicks from drags. Touch: press-and-
+    // hold lifts the card, so plain taps open the workspace (finger wobble
+    // used to trip the distance threshold and swallow taps).
+    useSensor(MouseSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(TouchSensor, {
+      activationConstraint: { delay: 250, tolerance: 8 },
+    }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
 
@@ -298,6 +302,8 @@ export function PipelineBoard({
       episodeNumber: null,
       doubleDownOf: null,
       clipOf: null,
+      sceneCount: 0,
+      shotTypeCount: 0,
       flagged: false,
     };
     setVideos((prev) => [...prev, optimistic]);
@@ -423,10 +429,7 @@ export function PipelineBoard({
     });
   }
 
-  function openVideo(id: string) {
-    if (justDraggedRef.current) return;
-    router.push(`/video/${id}`);
-  }
+  const blockClicks = React.useCallback(() => justDraggedRef.current, []);
 
   React.useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
@@ -537,7 +540,7 @@ export function PipelineBoard({
               status={status}
               label={COLUMN_LABELS[status]}
               videos={visible[status]}
-              onOpen={openVideo}
+              blockClicks={blockClicks}
               onCardAction={handleCardAction}
               className={mobileStage === status ? "flex" : "hidden md:flex"}
               header={

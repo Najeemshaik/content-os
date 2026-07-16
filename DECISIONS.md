@@ -100,6 +100,17 @@ Judgment calls made while building, per the PRD's instruction to decide and log 
 - **Format switch from the menu** shows a toast with a "View" action that flips the board — the card visibly leaves the current board, so the toast explains where it went.
 - The workspace Details card grows Duplicate and Delete alongside Archive.
 
+## Production pass: scenes, tap-to-open, perceived speed (owner request, 2026-07-16)
+
+- **Touch drags are press-and-hold** (`TouchSensor` delay 250ms/tolerance 8) with `MouseSensor` distance 6 for desktop — the old `PointerSensor` distance threshold read finger wobble as a drag and swallowed taps. Cards are now **stretched links** (whole surface navigates, Next prefetches); post-drag clicks suppressed via `onClickCapture` guard.
+- **Perceived speed**: `loading.tsx` skeletons for the workspace and app routes + `animate-in` entrances; cards get `active:scale` press feedback.
+- **Scenes are plain text**: a line starting with `/tag` (optional note after a space) opens a scene until the next `/` line. Everything stays one `scriptBody` string — autosave, revisions, clip-to-short, and export untouched. Parser in `lib/scenes.ts`.
+- **The editor paints scenes with a backdrop layer**: the textarea's text is transparent (visible caret/selection) over an `aria-hidden` div rendering the same string with identical metrics — tinted band + left rule per scene, colored header lines. `field-sizing-content` means no internal scroll, so the layers can't drift; trailing newlines get a zero-width space so empty line boxes render. Header lines keep regular weight (bold would shift caret alignment).
+- **Scene hues** are six art-directable tokens (`--scene-1…6`) assigned by tag-name hash — stable across sessions, no persistence needed.
+- **Shot plan** (right column) groups tagged scenes by shot type with ×count/words/runtime and jump links — the filming batch view. Board cards show `N · M shot types` tallies, computed server-side so scripts never ship to the board.
+- **Slash suggestions** render as a static row above the editor (starter vocabulary + tags already used); Tab completes the first match. No caret-anchored popover math.
+- Deferred: cross-video "filming day" view grouping Production-stage scenes by tag across videos.
+
 ## Empty start (owner request, 2026-07-16)
 
 - **All hardcoded seed content removed** — the PRD §8 demo videos, structures, and rhythm slots no longer ship. `seedIfEmpty` now ensures only the `rolling_average_window` setting (and keys off the `settings` table, since `videos` is legitimately empty). The live DB's demo/test rows were deleted the same day. Rhythm is configured in Settings; structures are added in Banks.

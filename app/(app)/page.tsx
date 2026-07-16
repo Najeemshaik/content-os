@@ -1,6 +1,7 @@
 import { asc, eq, isNull } from "drizzle-orm";
 import { getDb } from "@/lib/db/client";
 import { getFlagContext } from "@/lib/db/flags";
+import { parseScenes } from "@/lib/scenes";
 import { rhythmSlots, series, videos } from "@/lib/db/schema";
 import { PipelineBoard } from "@/components/pipeline/pipeline-board";
 import type { BoardVideo } from "@/components/pipeline/video-card";
@@ -22,6 +23,7 @@ export default async function PipelinePage() {
       doubleDownOf: videos.doubleDownOf,
       clipOf: videos.clipOf,
       seriesName: series.name,
+      scriptBody: videos.scriptBody,
     })
     .from(videos)
     .leftJoin(series, eq(videos.seriesId, series.id))
@@ -43,10 +45,16 @@ export default async function PipelinePage() {
     ...(await getFlagContext("short")).flaggedIds,
     ...(await getFlagContext("long")).flaggedIds,
   ]);
-  const boardVideos: BoardVideo[] = rows.map((row) => ({
-    ...row,
-    flagged: flaggedIds.has(row.id),
-  }));
+  // Scene tallies are computed here so full scripts never ship to the board.
+  const boardVideos: BoardVideo[] = rows.map(({ scriptBody, ...row }) => {
+    const tagged = parseScenes(scriptBody ?? "").filter((s) => s.tag);
+    return {
+      ...row,
+      sceneCount: tagged.length,
+      shotTypeCount: new Set(tagged.map((s) => s.tag)).size,
+      flagged: flaggedIds.has(row.id),
+    };
+  });
 
   return <PipelineBoard initialVideos={boardVideos} rhythmSlots={slots} />;
 }

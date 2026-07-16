@@ -31,7 +31,7 @@ export function PipelineColumn({
   status,
   label,
   videos,
-  onOpen,
+  blockClicks,
   onCardAction,
   header,
   className,
@@ -39,7 +39,7 @@ export function PipelineColumn({
   status: VideoStatus;
   label: string;
   videos: BoardVideo[];
-  onOpen: (id: string) => void;
+  blockClicks?: () => boolean;
   onCardAction: (video: BoardVideo, action: CardAction) => void;
   header?: React.ReactNode;
   className?: string;
@@ -78,7 +78,7 @@ export function PipelineColumn({
               <SortableVideoCard
                 key={video.id}
                 video={video}
-                onOpen={() => onOpen(video.id)}
+                blockClicks={blockClicks}
                 onAction={(action) => onCardAction(video, action)}
               />
             ))}
