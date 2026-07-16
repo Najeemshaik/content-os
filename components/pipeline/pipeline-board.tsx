@@ -18,7 +18,24 @@ import {
 import { sortableKeyboardCoordinates } from "@dnd-kit/sortable";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { createVideo, moveVideo } from "@/lib/actions/videos";
+import {
+  archiveVideo,
+  createVideo,
+  deleteVideo,
+  duplicateVideo,
+  moveVideo,
+  updateVideo,
+} from "@/lib/actions/videos";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import {
   VIDEO_FORMATS,
   VIDEO_STATUSES,
@@ -37,7 +54,11 @@ import { FilterBar, type BoardFilter } from "./filter-bar";
 import { PipelineColumn } from "./pipeline-column";
 import { QuickAdd, type QuickAddHandle } from "./quick-add";
 import { ThisWeekRail } from "./this-week-rail";
-import { VideoCardContent, type BoardVideo } from "./video-card";
+import {
+  VideoCardContent,
+  type BoardVideo,
+  type CardAction,
+} from "./video-card";
 
 const COLUMN_LABELS: Record<VideoStatus, string> = {
   idea: "Idea",
@@ -79,6 +100,12 @@ export function PipelineBoard({
   const [filter, setFilter] = React.useState<BoardFilter>("all");
   const [search, setSearch] = React.useState("");
   const [activeId, setActiveId] = React.useState<string | null>(null);
+  const [renameTarget, setRenameTarget] = React.useState<BoardVideo | null>(
+    null,
+  );
+  const [deleteTarget, setDeleteTarget] = React.useState<BoardVideo | null>(
+    null,
+  );
   const snapshotRef = React.useRef<BoardVideo[] | null>(null);
   const justDraggedRef = React.useRef(false);
   const quickAddRef = React.useRef<QuickAddHandle>(null);
@@ -293,6 +320,100 @@ export function PipelineBoard({
     });
   }
 
+  /** Optimistic local change + background persist with revert-on-failure. */
+  function mutate(
+    apply: (prev: BoardVideo[]) => BoardVideo[],
+    persist: () => Promise<{ ok: boolean; error?: string }>,
+    failureLabel: string,
+  ) {
+    const before = videos;
+    setVideos(apply);
+    startTransition(async () => {
+      try {
+        const result = await persist();
+        if (!result.ok) throw new Error(result.error);
+      } catch (error) {
+        setVideos(before);
+        toast.error(
+          `${failureLabel} — ${error instanceof Error ? error.message : "save failed"}`,
+        );
+      }
+    });
+  }
+
+  function handleCardAction(video: BoardVideo, action: CardAction) {
+    switch (action.kind) {
+      case "rename":
+        setRenameTarget(video);
+        break;
+      case "delete":
+        setDeleteTarget(video);
+        break;
+      case "duplicate": {
+        const newId = crypto.randomUUID();
+        const copy: BoardVideo = {
+          ...video,
+          id: newId,
+          title: `${video.title} (copy)`,
+          sortOrder: video.sortOrder + 1,
+          scheduledDate: null,
+          seriesName: null,
+          episodeNumber: null,
+          doubleDownOf: null,
+          clipOf: null,
+          flagged: false,
+        };
+        mutate(
+          (prev) => [...prev, copy],
+          () => duplicateVideo({ id: video.id, newId }),
+          "Couldn't duplicate",
+        );
+        break;
+      }
+      case "move": {
+        const target = visible[action.status];
+        const sortOrder = between(target.at(-1)?.sortOrder, undefined);
+        mutate(
+          (prev) =>
+            prev.map((v) =>
+              v.id === video.id ? { ...v, status: action.status, sortOrder } : v,
+            ),
+          () => moveVideo({ id: video.id, status: action.status, sortOrder }),
+          "Couldn't move",
+        );
+        break;
+      }
+      case "format":
+        mutate(
+          (prev) =>
+            prev.map((v) =>
+              v.id === video.id ? { ...v, format: action.format } : v,
+            ),
+          () => updateVideo({ id: video.id, format: action.format }),
+          "Couldn't change format",
+        );
+        toast.success(
+          action.format === "long"
+            ? "Moved to the Long-form board"
+            : "Moved to the Shorts board",
+          {
+            action: {
+              label: "View",
+              onClick: () => setBoardFormat(action.format),
+            },
+          },
+        );
+        break;
+      case "archive":
+        mutate(
+          (prev) => prev.filter((v) => v.id !== video.id),
+          () => archiveVideo({ id: video.id }),
+          "Couldn't archive",
+        );
+        break;
+    }
+  }
+
   function handleGhostClick(slot: WeekSlot) {
     // Rhythm slots are short-form — jump to the Shorts board to fill one.
     setBoardFormat("short");
@@ -417,6 +538,7 @@ export function PipelineBoard({
               label={COLUMN_LABELS[status]}
               videos={visible[status]}
               onOpen={openVideo}
+              onCardAction={handleCardAction}
               className={mobileStage === status ? "flex" : "hidden md:flex"}
               header={
                 status === "idea" ? (
@@ -430,6 +552,109 @@ export function PipelineBoard({
           {activeVideo && <VideoCardContent video={activeVideo} />}
         </DragOverlay>
       </DndContext>
+
+      <RenameDialog
+        target={renameTarget}
+        onClose={() => setRenameTarget(null)}
+        onRename={(video, title) =>
+          mutate(
+            (prev) =>
+              prev.map((v) => (v.id === video.id ? { ...v, title } : v)),
+            () => updateVideo({ id: video.id, title }),
+            "Couldn't rename",
+          )
+        }
+      />
+      <Dialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => !open && setDeleteTarget(null)}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Delete “{deleteTarget?.title}”?</DialogTitle>
+            <DialogDescription>
+              Permanently removes the video, its script, and its revision
+              history. Archive instead if you might want it back.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteTarget(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => {
+                const target = deleteTarget;
+                setDeleteTarget(null);
+                if (!target) return;
+                mutate(
+                  (prev) => prev.filter((v) => v.id !== target.id),
+                  () => deleteVideo({ id: target.id }),
+                  "Couldn't delete",
+                );
+              }}
+            >
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
+  );
+}
+
+function RenameDialog({
+  target,
+  onClose,
+  onRename,
+}: {
+  target: BoardVideo | null;
+  onClose: () => void;
+  onRename: (video: BoardVideo, title: string) => void;
+}) {
+  const [title, setTitle] = React.useState("");
+
+  // Load the target's title when the dialog opens (render-adjust pattern).
+  const [lastId, setLastId] = React.useState<string | null>(null);
+  if ((target?.id ?? null) !== lastId) {
+    setLastId(target?.id ?? null);
+    if (target) setTitle(target.title);
+  }
+
+  function submit() {
+    const trimmed = title.trim();
+    if (!target || !trimmed) return;
+    if (trimmed !== target.title) onRename(target, trimmed);
+    onClose();
+  }
+
+  return (
+    <Dialog open={!!target} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Rename</DialogTitle>
+          <DialogDescription className="sr-only">
+            Change the video title.
+          </DialogDescription>
+        </DialogHeader>
+        <Input
+          autoFocus
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") submit();
+          }}
+          aria-label="Title"
+        />
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button onClick={submit} disabled={!title.trim()}>
+            Rename
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

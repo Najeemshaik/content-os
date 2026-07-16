@@ -3,11 +3,53 @@
 import Link from "next/link";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { CalendarDays, Film, Flame, GitBranch, ListVideo } from "lucide-react";
+import {
+  Archive,
+  ArrowRight,
+  CalendarDays,
+  Copy,
+  Ellipsis,
+  Film,
+  Flame,
+  GitBranch,
+  ListVideo,
+  PenLine,
+  Trash2,
+} from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { cn } from "@/lib/utils";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { FormatBadge } from "./type-badge";
-import type { VideoFormat, VideoStatus, VideoType } from "@/lib/types";
+import {
+  VIDEO_STATUSES,
+  type VideoFormat,
+  type VideoStatus,
+  type VideoType,
+} from "@/lib/types";
+
+export type CardAction =
+  | { kind: "rename" }
+  | { kind: "duplicate" }
+  | { kind: "move"; status: VideoStatus }
+  | { kind: "format"; format: VideoFormat }
+  | { kind: "archive" }
+  | { kind: "delete" };
+
+const STATUS_LABELS: Record<VideoStatus, string> = {
+  idea: "Idea",
+  scripted: "Scripted",
+  production: "Production",
+  published: "Published",
+};
 
 export type BoardVideo = {
   id: string;
@@ -118,12 +160,80 @@ export function VideoCardContent({ video }: { video: BoardVideo }) {
   );
 }
 
+function CardMenu({
+  video,
+  onAction,
+}: {
+  video: BoardVideo;
+  onAction: (action: CardAction) => void;
+}) {
+  const otherFormat: VideoFormat = video.format === "short" ? "long" : "short";
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        aria-label={`Actions for ${video.title}`}
+        // Keep the click from opening the workspace or lifting the card.
+        onClick={(e: React.MouseEvent) => e.stopPropagation()}
+        onPointerDown={(e: React.PointerEvent) => e.stopPropagation()}
+        onKeyDown={(e: React.KeyboardEvent) => e.stopPropagation()}
+        className="absolute top-2 right-2 flex size-6 items-center justify-center rounded-md text-muted-foreground transition-opacity hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100 data-[popup-open]:bg-accent data-[popup-open]:opacity-100"
+      >
+        <Ellipsis className="size-4" aria-hidden />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent
+        align="end"
+        onClick={(e: React.MouseEvent) => e.stopPropagation()}
+      >
+        <DropdownMenuItem onClick={() => onAction({ kind: "rename" })}>
+          <PenLine aria-hidden /> Rename
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => onAction({ kind: "duplicate" })}>
+          <Copy aria-hidden /> Duplicate
+        </DropdownMenuItem>
+        <DropdownMenuSub>
+          <DropdownMenuSubTrigger>
+            <ArrowRight aria-hidden /> Move to
+          </DropdownMenuSubTrigger>
+          <DropdownMenuSubContent>
+            {VIDEO_STATUSES.filter((s) => s !== video.status).map((status) => (
+              <DropdownMenuItem
+                key={status}
+                onClick={() => onAction({ kind: "move", status })}
+              >
+                {STATUS_LABELS[status]}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuSubContent>
+        </DropdownMenuSub>
+        <DropdownMenuItem
+          onClick={() => onAction({ kind: "format", format: otherFormat })}
+        >
+          <Film aria-hidden />
+          {otherFormat === "long" ? "Make long-form" : "Make a short"}
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onClick={() => onAction({ kind: "archive" })}>
+          <Archive aria-hidden /> Archive
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          variant="destructive"
+          onClick={() => onAction({ kind: "delete" })}
+        >
+          <Trash2 aria-hidden /> Delete…
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 export function SortableVideoCard({
   video,
   onOpen,
+  onAction,
 }: {
   video: BoardVideo;
   onOpen: () => void;
+  onAction: (action: CardAction) => void;
 }) {
   const {
     attributes,
@@ -142,11 +252,12 @@ export function SortableVideoCard({
       {...listeners}
       onClick={onOpen}
       className={cn(
-        "group cursor-grab rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none",
+        "group relative cursor-grab rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none",
         isDragging && "opacity-40",
       )}
     >
       <VideoCardContent video={video} />
+      <CardMenu video={video} onAction={onAction} />
     </div>
   );
 }

@@ -92,6 +92,14 @@ Judgment calls made while building, per the PRD's instruction to decide and log 
 - **PWA chrome**: `viewportFit: "cover"` + light/dark `themeColor` so the installed app's status bar matches the canvas.
 - Verified via Playwright at 390×844 (iPhone-ish) against dev and the live production deployment — the extension-driven Chrome window can't shrink below desktop widths.
 
+## Card management (owner request, 2026-07-16)
+
+- **Every board card gets a ⋯ menu** (hover-revealed on desktop, always visible on touch): Rename, Duplicate, Move to ⟨stage⟩, Make long-form/short, Archive, Delete. All optimistic through one `mutate()` helper (apply local → persist → revert + toast on failure).
+- **Delete is real deletion** (confirmed dialog) alongside Archive: detaches `double_down_of`/`clip_of` references and drops revisions explicitly rather than relying on connection FK/cascade settings. The dialog steers toward Archive for anything you might want back.
+- **Duplicate copies the content, not the record**: title + type/format/status/script/hooks/notes/structure carry over; metrics, schedule, series slot, and lineage do not. The copy lands right under the original with a client-generated id for optimistic identity.
+- **Format switch from the menu** shows a toast with a "View" action that flips the board — the card visibly leaves the current board, so the toast explains where it went.
+- The workspace Details card grows Duplicate and Delete alongside Archive.
+
 ## Empty start (owner request, 2026-07-16)
 
 - **All hardcoded seed content removed** — the PRD §8 demo videos, structures, and rhythm slots no longer ship. `seedIfEmpty` now ensures only the `rolling_average_window` setting (and keys off the `settings` table, since `videos` is legitimately empty). The live DB's demo/test rows were deleted the same day. Rhythm is configured in Settings; structures are added in Banks.

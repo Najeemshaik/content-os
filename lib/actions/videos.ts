@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 import { getDb } from "@/lib/db/client";
-import { videos } from "@/lib/db/schema";
+import { scriptRevisions, videos } from "@/lib/db/schema";
 import { snapshotVideo } from "@/lib/db/revisions";
 import {
   VIDEO_FORMATS,
@@ -168,6 +168,79 @@ export async function archiveVideo(input: unknown): Promise<ActionResult> {
     return { ok: true };
   } catch (error) {
     return fail(error, "Could not archive video");
+  }
+}
+
+const duplicateSchema = z.object({
+  id: z.uuid(),
+  // Client-generated so the optimistic card and the row share identity.
+  newId: z.uuid(),
+});
+
+export async function duplicateVideo(input: unknown): Promise<ActionResult> {
+  try {
+    const { id, newId } = duplicateSchema.parse(input);
+    const db = await getDb();
+    const source = await db
+      .select()
+      .from(videos)
+      .where(eq(videos.id, id))
+      .get();
+    if (!source) return { ok: false, error: "Video not found" };
+    await db
+      .insert(videos)
+      .values({
+        id: newId,
+        title: `${source.title} (copy)`,
+        type: source.type,
+        format: source.format,
+        status: source.status,
+        notes: source.notes,
+        hookVerbal: source.hookVerbal,
+        hookWritten: source.hookWritten,
+        hookVisual: source.hookVisual,
+        scriptBody: source.scriptBody,
+        shotNotes: source.shotNotes,
+        structureId: source.structureId,
+        // Metrics, schedule, series slot, and lineage stay behind — a copy
+        // is a fresh take on the content, not a second record of the video.
+        sortOrder: source.sortOrder + 1,
+      })
+      .run();
+    revalidateAll();
+    return { ok: true };
+  } catch (error) {
+    return fail(error, "Could not duplicate video");
+  }
+}
+
+export async function deleteVideo(input: unknown): Promise<ActionResult> {
+  try {
+    const { id } = z.object({ id: z.uuid() }).parse(input);
+    const db = await getDb();
+    // Detach lineage references, drop revisions, then the row — explicit so
+    // it doesn't depend on the connection's foreign-key/cascade settings.
+    await db
+      .update(videos)
+      .set({ doubleDownOf: null })
+      .where(eq(videos.doubleDownOf, id))
+      .run();
+    await db
+      .update(videos)
+      .set({ clipOf: null })
+      .where(eq(videos.clipOf, id))
+      .run();
+    await db
+      .delete(scriptRevisions)
+      .where(eq(scriptRevisions.videoId, id))
+      .run();
+    const result = await db.delete(videos).where(eq(videos.id, id)).run();
+    if (result.rowsAffected === 0)
+      return { ok: false, error: "Video not found" };
+    revalidateAll();
+    return { ok: true };
+  } catch (error) {
+    return fail(error, "Could not delete video");
   }
 }
 

@@ -9,17 +9,21 @@ import {
   ArrowLeft,
   ArrowRight,
   ChartColumn,
+  Copy,
   FilePlus2,
   Film,
   Flame,
   GitBranch,
   History,
+  Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
   advanceStatus,
   archiveVideo,
   clipToShort,
+  deleteVideo,
+  duplicateVideo,
   expandToLong,
   updateVideo,
 } from "@/lib/actions/videos";
@@ -163,6 +167,7 @@ export function VideoWorkspace({
   const [templateOpen, setTemplateOpen] = React.useState(false);
   const [historyOpen, setHistoryOpen] = React.useState(false);
   const [archiveOpen, setArchiveOpen] = React.useState(false);
+  const [deleteOpen, setDeleteOpen] = React.useState(false);
   const [advancing, startAdvance] = React.useTransition();
   const scriptRef = React.useRef<HTMLTextAreaElement>(null);
   const [selection, setSelection] = React.useState<{
@@ -372,6 +377,41 @@ export function VideoWorkspace({
         `Couldn't archive — ${error instanceof Error ? error.message : "try again"}`,
       );
     }
+  }
+
+  async function destroy() {
+    try {
+      const result = await deleteVideo({ id: video.id });
+      if (!result.ok) throw new Error(result.error);
+      toast.success("Video deleted");
+      router.push("/");
+    } catch (error) {
+      toast.error(
+        `Couldn't delete — ${error instanceof Error ? error.message : "try again"}`,
+      );
+    }
+  }
+
+  function duplicate() {
+    void (async () => {
+      try {
+        await flushSave();
+        const newId = crypto.randomUUID();
+        const result = await duplicateVideo({ id: video.id, newId });
+        if (!result.ok) throw new Error(result.error);
+        toast.success("Duplicated", {
+          action: {
+            label: "Open copy",
+            onClick: () => router.push(`/video/${newId}`),
+          },
+        });
+        router.refresh();
+      } catch (error) {
+        toast.error(
+          `Couldn't duplicate — ${error instanceof Error ? error.message : "try again"}`,
+        );
+      }
+    })();
   }
 
   const words = wordCount(state.scriptBody);
@@ -684,15 +724,35 @@ export function VideoWorkspace({
                 className="h-8 w-full text-sm"
               />
             </div>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="mt-3 -mb-1 w-full justify-start gap-1.5 px-1.5 text-muted-foreground hover:text-destructive"
-              onClick={() => setArchiveOpen(true)}
-            >
-              <Archive className="size-3.5" aria-hidden />
-              Archive video
-            </Button>
+            <div className="mt-3 -mb-1 flex flex-col">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="w-full justify-start gap-1.5 px-1.5 text-muted-foreground"
+                onClick={duplicate}
+              >
+                <Copy className="size-3.5" aria-hidden />
+                Duplicate video
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="w-full justify-start gap-1.5 px-1.5 text-muted-foreground"
+                onClick={() => setArchiveOpen(true)}
+              >
+                <Archive className="size-3.5" aria-hidden />
+                Archive video
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="w-full justify-start gap-1.5 px-1.5 text-muted-foreground hover:text-destructive"
+                onClick={() => setDeleteOpen(true)}
+              >
+                <Trash2 className="size-3.5" aria-hidden />
+                Delete video
+              </Button>
+            </div>
           </section>
 
           <section className="rounded-2xl bg-card p-4 shadow-card">
@@ -856,6 +916,26 @@ export function VideoWorkspace({
             </Button>
             <Button variant="destructive" onClick={archive}>
               Archive
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete this video?</DialogTitle>
+            <DialogDescription>
+              Permanently removes the video, its script, and its revision
+              history. This can&apos;t be undone — archive instead if you
+              might want it back.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteOpen(false)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={destroy}>
+              Delete
             </Button>
           </DialogFooter>
         </DialogContent>

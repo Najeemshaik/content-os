@@ -8,7 +8,11 @@ import {
 import { Clapperboard, Lightbulb, PenLine, Send } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { VideoStatus } from "@/lib/types";
-import { SortableVideoCard, type BoardVideo } from "./video-card";
+import {
+  SortableVideoCard,
+  type BoardVideo,
+  type CardAction,
+} from "./video-card";
 
 const STAGE_META: Record<
   VideoStatus,
@@ -28,6 +32,7 @@ export function PipelineColumn({
   label,
   videos,
   onOpen,
+  onCardAction,
   header,
   className,
 }: {
@@ -35,6 +40,7 @@ export function PipelineColumn({
   label: string;
   videos: BoardVideo[];
   onOpen: (id: string) => void;
+  onCardAction: (video: BoardVideo, action: CardAction) => void;
   header?: React.ReactNode;
   className?: string;
 }) {
@@ -73,6 +79,7 @@ export function PipelineColumn({
                 key={video.id}
                 video={video}
                 onOpen={() => onOpen(video.id)}
+                onAction={(action) => onCardAction(video, action)}
               />
             ))}
             {videos.length === 0 && (
