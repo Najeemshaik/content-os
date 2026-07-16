@@ -5,15 +5,22 @@ import {
   SortableContext,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
+import { Clapperboard, Lightbulb, PenLine, Send } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { VideoStatus } from "@/lib/types";
 import { SortableVideoCard, type BoardVideo } from "./video-card";
 
-const EMPTY_HINTS: Record<VideoStatus, string> = {
-  idea: "Capture your first idea above.",
-  scripted: "Drag an idea here once its script is done.",
-  production: "Drag a scripted video here when you start filming.",
-  published: "Drag a video here once it's live.",
+const STAGE_META: Record<
+  VideoStatus,
+  { icon: React.ComponentType<{ className?: string }>; hint: string }
+> = {
+  idea: { icon: Lightbulb, hint: "Capture your first idea above." },
+  scripted: { icon: PenLine, hint: "Drag an idea here once its script is done." },
+  production: {
+    icon: Clapperboard,
+    hint: "Drag a scripted video here when you start filming.",
+  },
+  published: { icon: Send, hint: "Drag a video here once it's live." },
 };
 
 export function PipelineColumn({
@@ -30,6 +37,7 @@ export function PipelineColumn({
   header?: React.ReactNode;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: status });
+  const { icon: Icon, hint } = STAGE_META[status];
 
   return (
     <section
@@ -39,14 +47,15 @@ export function PipelineColumn({
         isOver && "bg-accent/80",
       )}
     >
-      <header className="flex items-center justify-between px-4 pt-3.5 pb-2">
-        <h2 className="text-sm font-medium">{label}</h2>
-        <span className="rounded-full bg-background px-2 py-0.5 text-xs font-medium tabular-nums text-muted-foreground shadow-xs">
+      <header className="flex items-center gap-2 px-4 pt-3.5 pb-2.5">
+        <Icon className="size-3.5 text-muted-foreground/70" aria-hidden />
+        <h2 className="text-sm font-semibold tracking-tight">{label}</h2>
+        <span className="ms-auto rounded-full bg-background px-2 py-0.5 text-xs font-medium tabular-nums text-muted-foreground shadow-xs">
           {videos.length}
         </span>
       </header>
       <div className="flex min-h-0 flex-1 flex-col px-2 pb-2">
-        {header && <div className="px-1 pb-1">{header}</div>}
+        {header && <div className="px-1 pb-2">{header}</div>}
         <SortableContext
           items={videos.map((v) => v.id)}
           strategy={verticalListSortingStrategy}
@@ -63,9 +72,12 @@ export function PipelineColumn({
               />
             ))}
             {videos.length === 0 && (
-              <p className="px-3 py-5 text-xs leading-relaxed text-muted-foreground/80">
-                {EMPTY_HINTS[status]}
-              </p>
+              <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-border/70 px-4 py-8 text-center">
+                <Icon className="size-4 text-muted-foreground/40" aria-hidden />
+                <p className="max-w-44 text-xs leading-relaxed text-muted-foreground/80">
+                  {hint}
+                </p>
+              </div>
             )}
           </div>
         </SortableContext>

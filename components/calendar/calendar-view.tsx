@@ -179,12 +179,19 @@ function DayCell({
       aria-label={`${format(date, "EEEE MMM d")}, ${videos.length} scheduled`}
       className={cn(
         "flex min-h-24 flex-col gap-1.5 rounded-xl bg-muted/40 p-2 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring",
-        compact ? "min-h-24" : "min-h-44",
+        compact ? "min-h-24" : "min-h-96",
+        isToday && "bg-accent/60",
         isOver && "bg-accent",
         outsideMonth && "opacity-40",
       )}
     >
-      <div className="flex items-center justify-between px-0.5">
+      <div
+        className={cn(
+          "flex items-center justify-between px-0.5",
+          // Week view gets an external header row on large screens.
+          !compact && "lg:hidden",
+        )}
+      >
         <span
           className={cn(
             "text-xs font-medium tabular-nums text-muted-foreground",
@@ -346,7 +353,7 @@ export function CalendarView({
   const peekVideos = peekDate ? (byDate.get(peekDate) ?? []) : [];
 
   return (
-    <div className="flex min-h-svh flex-col gap-5 p-5 md:px-8 md:py-6">
+    <div className="mx-auto flex min-h-svh w-full max-w-9xl flex-col gap-5 p-5 md:px-8 md:py-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-xl font-semibold tracking-tight">Calendar</h1>
         <div className="flex flex-wrap items-center gap-2">
@@ -411,17 +418,50 @@ export function CalendarView({
         <div className="flex flex-1 flex-col gap-5 lg:flex-row">
           <div className="min-w-0 flex-1">
             {view === "week" ? (
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-7">
-                {days.map((day) => (
-                  <DayCell
-                    key={iso(day)}
-                    date={day}
-                    today={today}
-                    videos={byDate.get(iso(day)) ?? []}
-                    ghosts={ghostsFor(day)}
-                    onPeek={setPeekDate}
-                  />
-                ))}
+              <div className="flex flex-col gap-2">
+                <div className="hidden grid-cols-7 gap-2 lg:grid">
+                  {days.map((day) => {
+                    const isToday = iso(day) === today;
+                    return (
+                      <div
+                        key={iso(day)}
+                        className={cn(
+                          "flex items-baseline gap-1.5 px-2",
+                          isToday ? "text-foreground" : "text-muted-foreground/70",
+                        )}
+                      >
+                        <span className="text-xs font-semibold tracking-widest uppercase">
+                          {format(day, "EEE")}
+                        </span>
+                        <span
+                          className={cn(
+                            "text-xs tabular-nums",
+                            isToday && "font-semibold",
+                          )}
+                        >
+                          {format(day, "d")}
+                        </span>
+                        {isToday && (
+                          <span className="text-2xs font-medium tracking-wide text-muted-foreground uppercase">
+                            Today
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-7">
+                  {days.map((day) => (
+                    <DayCell
+                      key={iso(day)}
+                      date={day}
+                      today={today}
+                      videos={byDate.get(iso(day)) ?? []}
+                      ghosts={ghostsFor(day)}
+                      onPeek={setPeekDate}
+                    />
+                  ))}
+                </div>
               </div>
             ) : (
               <div className="flex flex-col gap-2">

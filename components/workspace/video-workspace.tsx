@@ -326,7 +326,7 @@ export function VideoWorkspace({
             }
             rows={1}
             aria-label="Title"
-            className="min-h-0 flex-1 resize-none border-0 bg-transparent p-0 text-2xl leading-tight font-semibold tracking-tight shadow-none focus-visible:ring-0 dark:bg-transparent"
+            className="field-sizing-content min-h-0 flex-1 resize-none border-0 bg-transparent p-0 !text-2xl leading-tight font-semibold tracking-tight shadow-none focus-visible:ring-0 dark:bg-transparent"
           />
           {flagged && (
             <Flame
@@ -335,113 +335,6 @@ export function VideoWorkspace({
               aria-label="5× outlier"
             />
           )}
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2">
-          <Select
-            value={state.type}
-            onValueChange={(v) => patch({ type: v as VideoType }, { immediate: true })}
-          >
-            <SelectTrigger size="sm" aria-label="Type">
-              <TypeBadge type={state.type} />
-            </SelectTrigger>
-            <SelectContent>
-              {VIDEO_TYPES.map((t) => (
-                <SelectItem key={t} value={t} className="capitalize">
-                  {t}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
-          <Select
-            value={state.status}
-            onValueChange={(v) =>
-              patch({ status: v as VideoStatus }, { immediate: true })
-            }
-          >
-            <SelectTrigger size="sm" aria-label="Status">
-              {STATUS_LABELS[state.status]}
-            </SelectTrigger>
-            <SelectContent>
-              {(Object.keys(STATUS_LABELS) as VideoStatus[]).map((s) => (
-                <SelectItem key={s} value={s}>
-                  {STATUS_LABELS[s]}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
-          <Select
-            value={state.seriesId ?? "none"}
-            onValueChange={(v) =>
-              patch(
-                {
-                  seriesId: v === "none" ? null : v,
-                  ...(v === "none" ? { episodeNumber: null } : {}),
-                },
-                { immediate: true },
-              )
-            }
-          >
-            <SelectTrigger size="sm" aria-label="Series">
-              {state.seriesId
-                ? (seriesOptions.find((s) => s.id === state.seriesId)?.name ??
-                  "Series")
-                : "No series"}
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="none">No series</SelectItem>
-              {seriesOptions.map((s) => (
-                <SelectItem key={s.id} value={s.id}>
-                  {s.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
-          {state.seriesId && (
-            <Input
-              type="number"
-              min={1}
-              value={state.episodeNumber ?? ""}
-              onChange={(e) =>
-                patch({
-                  episodeNumber: e.target.value
-                    ? Math.max(1, Number(e.target.value))
-                    : null,
-                })
-              }
-              aria-label="Episode number"
-              placeholder="Ep #"
-              className="h-8 w-18 text-sm"
-            />
-          )}
-
-          <Input
-            type="date"
-            value={state.scheduledDate ?? ""}
-            onChange={(e) =>
-              patch(
-                { scheduledDate: e.target.value || null },
-                { immediate: true },
-              )
-            }
-            aria-label="Scheduled date"
-            className="h-8 w-fit text-sm"
-          />
-
-          <div className="ms-auto">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="gap-1.5 text-muted-foreground hover:text-destructive"
-              onClick={() => setArchiveOpen(true)}
-            >
-              <Archive className="size-3.5" aria-hidden />
-              Archive
-            </Button>
-          </div>
         </div>
       </div>
 
@@ -485,7 +378,7 @@ export function VideoWorkspace({
               }
               placeholder="Write the script. Verbal hook first — say it like you'd say it on camera."
               aria-label="Script"
-              className="max-h-none min-h-[55svh] w-full resize-none rounded-none border-0 bg-transparent px-5 py-5 !text-base leading-7 shadow-none focus-visible:ring-0 md:px-8 dark:bg-transparent"
+              className="field-sizing-content max-h-none min-h-[55svh] w-full resize-none rounded-none border-0 bg-transparent px-5 py-5 !text-base leading-7 shadow-none focus-visible:ring-0 md:px-8 dark:bg-transparent"
               style={{ maxWidth: "72ch" }}
             />
           </section>
@@ -509,6 +402,128 @@ export function VideoWorkspace({
         </div>
 
         <div className="flex flex-col gap-4">
+          <section className="rounded-2xl bg-card p-4 shadow-card">
+            <h2 className="mb-3 text-sm font-semibold tracking-tight">
+              Details
+            </h2>
+            <div className="grid grid-cols-[72px_1fr] items-center gap-x-3 gap-y-2">
+              <span className="text-xs text-muted-foreground">Type</span>
+              <Select
+                value={state.type}
+                onValueChange={(v) =>
+                  patch({ type: v as VideoType }, { immediate: true })
+                }
+              >
+                <SelectTrigger size="sm" aria-label="Type" className="w-full">
+                  <TypeBadge type={state.type} />
+                </SelectTrigger>
+                <SelectContent>
+                  {VIDEO_TYPES.map((t) => (
+                    <SelectItem key={t} value={t} className="capitalize">
+                      {t}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              <span className="text-xs text-muted-foreground">Status</span>
+              <Select
+                value={state.status}
+                onValueChange={(v) =>
+                  patch({ status: v as VideoStatus }, { immediate: true })
+                }
+              >
+                <SelectTrigger size="sm" aria-label="Status" className="w-full">
+                  {STATUS_LABELS[state.status]}
+                </SelectTrigger>
+                <SelectContent>
+                  {(Object.keys(STATUS_LABELS) as VideoStatus[]).map((s) => (
+                    <SelectItem key={s} value={s}>
+                      {STATUS_LABELS[s]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              <span className="text-xs text-muted-foreground">Series</span>
+              <div className="flex items-center gap-1.5">
+                <Select
+                  value={state.seriesId ?? "none"}
+                  onValueChange={(v) =>
+                    patch(
+                      {
+                        seriesId: v === "none" ? null : v,
+                        ...(v === "none" ? { episodeNumber: null } : {}),
+                      },
+                      { immediate: true },
+                    )
+                  }
+                >
+                  <SelectTrigger
+                    size="sm"
+                    aria-label="Series"
+                    className="min-w-0 flex-1"
+                  >
+                    <span className="truncate">
+                      {state.seriesId
+                        ? (seriesOptions.find((s) => s.id === state.seriesId)
+                            ?.name ?? "Series")
+                        : "No series"}
+                    </span>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">No series</SelectItem>
+                    {seriesOptions.map((s) => (
+                      <SelectItem key={s.id} value={s.id}>
+                        {s.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {state.seriesId && (
+                  <Input
+                    type="number"
+                    min={1}
+                    value={state.episodeNumber ?? ""}
+                    onChange={(e) =>
+                      patch({
+                        episodeNumber: e.target.value
+                          ? Math.max(1, Number(e.target.value))
+                          : null,
+                      })
+                    }
+                    aria-label="Episode number"
+                    placeholder="#"
+                    className="h-8 w-14 shrink-0 text-sm"
+                  />
+                )}
+              </div>
+
+              <span className="text-xs text-muted-foreground">Scheduled</span>
+              <Input
+                type="date"
+                value={state.scheduledDate ?? ""}
+                onChange={(e) =>
+                  patch(
+                    { scheduledDate: e.target.value || null },
+                    { immediate: true },
+                  )
+                }
+                aria-label="Scheduled date"
+                className="h-8 w-full text-sm"
+              />
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="mt-3 -mb-1 w-full justify-start gap-1.5 px-1.5 text-muted-foreground hover:text-destructive"
+              onClick={() => setArchiveOpen(true)}
+            >
+              <Archive className="size-3.5" aria-hidden />
+              Archive video
+            </Button>
+          </section>
+
           <section className="rounded-2xl bg-card p-4 shadow-card">
             <h2 className="mb-3 text-sm font-semibold tracking-tight">
               Hook stack

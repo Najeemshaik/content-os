@@ -112,7 +112,7 @@ export function ReviewView({
   const [ddTarget, setDdTarget] = React.useState<ReviewVideo | null>(null);
 
   return (
-    <div className="flex min-h-svh flex-col gap-5 p-5 md:px-8 md:py-6">
+    <div className="mx-auto flex min-h-svh w-full max-w-7xl flex-col gap-5 p-5 md:px-8 md:py-6">
       <PageHeader
         title="Review"
         description="Log metrics after publishing — the app flags anything doing 5× your rolling average."

@@ -9,6 +9,7 @@ import {
   Columns3,
   Library,
   ListVideo,
+  Plus,
   Settings,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -44,6 +45,19 @@ export function Sidebar() {
           Content OS
         </Link>
       </div>
+      <div className="px-3 pb-4">
+        <button
+          type="button"
+          onClick={() =>
+            window.dispatchEvent(new CustomEvent("content-os:capture"))
+          }
+          className="flex w-full items-center gap-2 rounded-lg border bg-card px-2.5 py-2 text-sm font-medium text-sidebar-foreground shadow-xs transition-shadow hover:shadow-card-hover"
+        >
+          <Plus className="size-4 text-sidebar-foreground/50" aria-hidden />
+          Capture idea
+          <Kbd className="ms-auto">⌘K</Kbd>
+        </button>
+      </div>
       <nav className="flex flex-1 flex-col gap-0.5 px-3" aria-label="Main">
         {NAV.map(({ href, label, icon: Icon }) => {
           const active = isActive(pathname, href);
@@ -70,14 +84,11 @@ export function Sidebar() {
           );
         })}
       </nav>
-      <div className="flex flex-col gap-3 px-5 pb-5">
+      <div className="flex items-center justify-between px-5 pb-4">
         <p className="text-xs text-sidebar-foreground/45">
-          <Kbd>⌘K</Kbd> capture · <Kbd>?</Kbd> shortcuts
+          <Kbd>?</Kbd> shortcuts
         </p>
-        <div className="flex items-center justify-between">
-          <span className="text-xs text-sidebar-foreground/45">v1</span>
-          <ThemeToggle />
-        </div>
+        <ThemeToggle />
       </div>
     </aside>
   );

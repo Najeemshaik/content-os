@@ -24,7 +24,7 @@ export function SeriesList({ series }: { series: SeriesWithProgress[] }) {
   const [formOpen, setFormOpen] = React.useState(false);
 
   return (
-    <div className="flex min-h-svh flex-col gap-5 p-5 md:px-8 md:py-6">
+    <div className="mx-auto flex min-h-svh w-full max-w-7xl flex-col gap-5 p-5 md:px-8 md:py-6">
       <PageHeader
         title="Series"
         description="Planned sequences of related episodes."

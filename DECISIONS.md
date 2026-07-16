@@ -51,3 +51,13 @@ Judgment calls made while building, per the PRD's instruction to decide and log 
 - **Spark uses `Math.random()` client-side only** — pure combinatorics from the PRD's static lists, deduped, 3×3 grid, shuffleable.
 - **Base UI quirk**: `SelectValue` renders the raw value, not the item label — triggers render their own labels where they differ.
 - **shadcn's CommandDialog no longer wraps children in `<Command>`** — pickers must include it themselves.
+
+## UX refinement pass
+
+- **Cards carry a type-colored left accent bar + colored uppercase micro-label** instead of pill badges — the board scans by color at a glance. Added a `--text-2xs` (11px) type token for micro-labels rather than hardcoding sizes.
+- **Content widths are capped** via container tokens (`--container-8xl/9xl`): board and calendar at 9xl, tables at 7xl — cards stop stretching into unscannable strips on wide monitors.
+- **Workspace meta moved from a scattered header row into a "Details" panel** (type/status/series/date/archive) in the right column; the header keeps only back · save state · the one primary action. Title and script auto-grow via `field-sizing-content`.
+- **Capture got a visible affordance**: a "Capture idea ⌘K" button at the top of the sidebar dispatches a `content-os:capture` event that the global overlay listens for.
+- **Stage columns have icons** (idea/scripted/production/published) and dashed ghost empty states; quick-add renders as a ghost card that solidifies on focus.
+- **Calendar week view gained a weekday header row** (with a "Today" marker and tinted today column); cells fill the viewport height.
+- **Filters are a connected segmented control** with type dots (ToggleGroup `spacing={0}`).

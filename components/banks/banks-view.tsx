@@ -132,7 +132,7 @@ export function BanksView({
   }
 
   return (
-    <div className="flex min-h-svh flex-col gap-5 p-5 md:px-8 md:py-6">
+    <div className="mx-auto flex min-h-svh w-full max-w-7xl flex-col gap-5 p-5 md:px-8 md:py-6">
       <Tabs defaultValue="outliers" className="gap-5">
         <PageHeader
           title="Banks"

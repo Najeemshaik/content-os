@@ -7,7 +7,6 @@ import { CalendarDays, Flame, GitBranch, ListVideo } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { cn } from "@/lib/utils";
 import type { VideoStatus, VideoType } from "@/lib/types";
-import { TypeBadge } from "./type-badge";
 
 export type BoardVideo = {
   id: string;
@@ -22,14 +21,33 @@ export type BoardVideo = {
   flagged: boolean;
 };
 
+const ACCENTS: Record<VideoType, { bar: string; text: string }> = {
+  take: { bar: "bg-take", text: "text-take" },
+  teach: { bar: "bg-teach", text: "text-teach" },
+  story: { bar: "bg-story", text: "text-story" },
+};
+
 export function VideoCardContent({ video }: { video: BoardVideo }) {
+  const accent = ACCENTS[video.type];
   return (
-    <div className="rounded-xl bg-card p-3.5 shadow-card transition-shadow duration-150 group-hover:shadow-card-hover motion-reduce:transition-none">
-      <div className="flex items-center gap-1.5">
-        <TypeBadge type={video.type} />
+    <div className="relative overflow-hidden rounded-xl bg-card p-3.5 pl-4 shadow-card transition-shadow duration-150 group-hover:shadow-card-hover motion-reduce:transition-none">
+      {/* Type accent — scan the board by color */}
+      <span
+        className={cn("absolute inset-y-0 left-0 w-0.5", accent.bar)}
+        aria-hidden
+      />
+      <div className="flex items-center gap-2">
+        <span
+          className={cn(
+            "text-2xs leading-none font-semibold tracking-widest uppercase",
+            accent.text,
+          )}
+        >
+          {video.type}
+        </span>
         {video.doubleDownOf && (
           <span
-            className="inline-flex items-center gap-1 rounded-full border border-border bg-muted/60 px-1.5 py-0.5 text-xs leading-none font-medium text-muted-foreground"
+            className="inline-flex items-center gap-1 text-2xs leading-none font-medium tracking-wide text-muted-foreground uppercase"
             title="Double-down variant"
           >
             <GitBranch className="size-3" aria-hidden />
@@ -51,7 +69,7 @@ export function VideoCardContent({ video }: { video: BoardVideo }) {
           // let every other key (board shortcuts) bubble.
           if (e.key === "Enter" || e.key === " ") e.stopPropagation();
         }}
-        className="mt-2.5 line-clamp-3 block text-sm leading-snug font-medium text-card-foreground focus-visible:underline focus-visible:outline-none"
+        className="mt-2 line-clamp-3 block text-sm leading-snug font-medium text-card-foreground focus-visible:underline focus-visible:outline-none"
       >
         {video.title}
       </Link>

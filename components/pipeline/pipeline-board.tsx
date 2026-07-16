@@ -293,7 +293,7 @@ export function PipelineBoard({
     : null;
 
   return (
-    <div className="flex min-h-svh flex-col gap-5 p-5 md:h-svh md:px-8 md:py-6">
+    <div className="mx-auto flex min-h-svh w-full max-w-9xl flex-col gap-5 p-5 md:h-svh md:px-8 md:py-6">
       <div className="flex flex-col gap-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h1 className="text-xl font-semibold tracking-tight">Pipeline</h1>

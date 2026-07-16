@@ -4,6 +4,7 @@ import * as React from "react";
 import { Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { TypeDot } from "./type-badge";
 import { VIDEO_TYPES, type VideoType } from "@/lib/types";
 
 export type BoardFilter = "all" | VideoType;
@@ -30,11 +31,13 @@ export function FilterBar({
         }
         variant="outline"
         size="sm"
+        spacing={0}
         aria-label="Filter by type"
       >
         <ToggleGroupItem value="all">All</ToggleGroupItem>
         {VIDEO_TYPES.map((t) => (
-          <ToggleGroupItem key={t} value={t} className="capitalize">
+          <ToggleGroupItem key={t} value={t} className="gap-1.5 capitalize">
+            <TypeDot type={t} className="size-1.5" />
             {t}
           </ToggleGroupItem>
         ))}

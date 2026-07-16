@@ -10,6 +10,8 @@ export function GlobalOverlays() {
   const [shortcutsOpen, setShortcutsOpen] = React.useState(false);
 
   React.useEffect(() => {
+    const onCaptureRequest = () => setCaptureOpen(true);
+    window.addEventListener("content-os:capture", onCaptureRequest);
     function onKeyDown(event: KeyboardEvent) {
       if (event.key === "k" && (event.metaKey || event.ctrlKey)) {
         event.preventDefault();
@@ -29,7 +31,10 @@ export function GlobalOverlays() {
       }
     }
     window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("content-os:capture", onCaptureRequest);
+    };
   }, []);
 
   return (
