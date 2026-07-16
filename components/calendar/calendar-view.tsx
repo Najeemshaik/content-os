@@ -60,7 +60,11 @@ import {
   SelectTrigger,
 } from "@/components/ui/select";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { TypeBadge, TypeDot } from "@/components/pipeline/type-badge";
+import {
+  FormatBadge,
+  TypeBadge,
+  TypeDot,
+} from "@/components/pipeline/type-badge";
 
 export type CalendarVideo = {
   id: string;
@@ -124,10 +128,15 @@ function WeekChip({
   return (
     <div className="relative overflow-hidden rounded-lg bg-card py-2 pr-2.5 pl-3 shadow-card transition-shadow hover:shadow-card-hover">
       <span
-        className={cn("absolute inset-y-0 left-0 w-0.5", accent.bar)}
+        className={cn(
+          "absolute inset-y-0 left-0",
+          video.format === "long" ? "w-1.5" : "w-0.5",
+          accent.bar,
+        )}
         aria-hidden
       />
-      <div className="flex items-center gap-1.5">
+      {/* Wraps — day columns are narrow and the LONG chip must stay whole. */}
+      <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
         <span
           className={cn(
             "text-2xs leading-none font-semibold tracking-widest uppercase",
@@ -136,11 +145,7 @@ function WeekChip({
         >
           {video.type}
         </span>
-        {video.format === "long" && (
-          <span className="rounded-sm bg-muted px-1 py-px text-2xs leading-none font-semibold tracking-widest text-muted-foreground uppercase">
-            Long
-          </span>
-        )}
+        <FormatBadge format={video.format} />
         {overdue && (
           <span className="inline-flex items-center gap-1 text-2xs leading-none font-medium text-destructive">
             <TriangleAlert className="size-3" aria-hidden />
@@ -815,6 +820,7 @@ function DayPeek({
               className="flex items-center gap-2 rounded-lg border bg-card px-3 py-2 text-sm transition-colors hover:bg-accent"
             >
               <TypeBadge type={video.type} />
+              <FormatBadge format={video.format} />
               <span className="min-w-0 flex-1 truncate font-medium">
                 {video.title}
               </span>

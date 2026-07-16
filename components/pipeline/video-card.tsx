@@ -6,6 +6,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { CalendarDays, Film, Flame, GitBranch, ListVideo } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { cn } from "@/lib/utils";
+import { FormatBadge } from "./type-badge";
 import type { VideoFormat, VideoStatus, VideoType } from "@/lib/types";
 
 export type BoardVideo = {
@@ -33,9 +34,14 @@ export function VideoCardContent({ video }: { video: BoardVideo }) {
   const accent = ACCENTS[video.type];
   return (
     <div className="relative overflow-hidden rounded-xl bg-card p-3.5 pl-4 shadow-card transition-shadow duration-150 group-hover:shadow-card-hover motion-reduce:transition-none">
-      {/* Type accent — scan the board by color */}
+      {/* Type accent — scan the board by color. Long-form gets a thick bar
+          so the two worlds read differently in peripheral vision. */}
       <span
-        className={cn("absolute inset-y-0 left-0 w-0.5", accent.bar)}
+        className={cn(
+          "absolute inset-y-0 left-0",
+          video.format === "long" ? "w-1.5" : "w-0.5",
+          accent.bar,
+        )}
         aria-hidden
       />
       <div className="flex items-center gap-2">
@@ -47,6 +53,7 @@ export function VideoCardContent({ video }: { video: BoardVideo }) {
         >
           {video.type}
         </span>
+        <FormatBadge format={video.format} />
         {video.clipOf && (
           <span
             className="inline-flex items-center gap-1 text-2xs leading-none font-medium tracking-wide text-muted-foreground uppercase"

@@ -56,7 +56,8 @@ import {
   SelectTrigger,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { TypeBadge } from "@/components/pipeline/type-badge";
+import { cn } from "@/lib/utils";
+import { FormatBadge, TypeBadge } from "@/components/pipeline/type-badge";
 import { HookStack } from "./hook-stack";
 import { RevisionSheet } from "./revision-sheet";
 import { SaveIndicator, type SaveState } from "./save-indicator";
@@ -78,6 +79,12 @@ const STATUS_LABELS: Record<VideoStatus, string> = {
 const FORMAT_LABELS: Record<VideoFormat, string> = {
   short: "Short",
   long: "Long-form",
+};
+
+const TYPE_TEXT: Record<VideoType, string> = {
+  take: "text-take",
+  teach: "text-teach",
+  story: "text-story",
 };
 
 type Editable = {
@@ -409,6 +416,18 @@ export function VideoWorkspace({
               </Button>
             )}
           </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <span
+            className={cn(
+              "text-2xs leading-none font-semibold tracking-widest uppercase",
+              TYPE_TEXT[state.type],
+            )}
+          >
+            {state.type}
+          </span>
+          <FormatBadge format={state.format} />
         </div>
 
         <div className="flex items-start gap-3">

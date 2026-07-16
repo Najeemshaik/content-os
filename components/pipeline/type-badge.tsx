@@ -1,5 +1,5 @@
 import { cn } from "@/lib/utils";
-import type { VideoType } from "@/lib/types";
+import type { VideoFormat, VideoType } from "@/lib/types";
 
 const STYLES: Record<VideoType, { chip: string; dot: string }> = {
   take: { chip: "bg-take/8 text-take border-take/15", dot: "bg-take" },
@@ -27,6 +27,28 @@ export function TypeBadge({
         aria-hidden
       />
       {type}
+    </span>
+  );
+}
+
+/** Marks long-form content wherever a card appears; shorts (the default
+ *  world) stay unmarked so the exception is what catches the eye. */
+export function FormatBadge({
+  format,
+  className,
+}: {
+  format: VideoFormat;
+  className?: string;
+}) {
+  if (format !== "long") return null;
+  return (
+    <span
+      className={cn(
+        "inline-flex shrink-0 items-center rounded-sm bg-foreground/85 px-1 py-px text-2xs leading-none font-semibold tracking-widest text-background uppercase",
+        className,
+      )}
+    >
+      Long
     </span>
   );
 }
