@@ -6,7 +6,9 @@ const nextConfig: NextConfig = {
   // migrate() reads SQL files from disk at runtime — make sure they're traced
   // into the serverless bundle on Vercel.
   outputFileTracingIncludes: {
-    "/**/*": ["./lib/db/migrations/**/*"],
+    // Keys are route globs; cover the root route and every nested route.
+    "/*": ["./lib/db/migrations/**/*"],
+    "/**": ["./lib/db/migrations/**/*"],
   },
 };
 
