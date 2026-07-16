@@ -2,6 +2,7 @@ import "server-only";
 import { and, desc, eq, isNull, isNotNull } from "drizzle-orm";
 import { db } from "./client";
 import { settings, videos } from "./schema";
+import type { VideoFormat } from "@/lib/types";
 
 export type FlagContext = {
   /** Rolling average of views over the last N published videos, or null when
@@ -21,7 +22,9 @@ export function getRollingWindow(): number {
   return Number.isFinite(parsed) && parsed >= 3 ? Math.floor(parsed) : 10;
 }
 
-export function getFlagContext(): FlagContext {
+// Baselines are format-scoped: a short is only ever compared against other
+// shorts, a long against other longs.
+export function getFlagContext(format: VideoFormat): FlagContext {
   const windowSize = getRollingWindow();
   const published = db
     .select({ id: videos.id, views: videos.views })
@@ -29,6 +32,7 @@ export function getFlagContext(): FlagContext {
     .where(
       and(
         eq(videos.status, "published"),
+        eq(videos.format, format),
         isNull(videos.archivedAt),
         isNotNull(videos.publishedAt),
       ),

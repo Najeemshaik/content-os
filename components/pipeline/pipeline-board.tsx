@@ -19,12 +19,16 @@ import { sortableKeyboardCoordinates } from "@dnd-kit/sortable";
 import { toast } from "sonner";
 import { createVideo, moveVideo } from "@/lib/actions/videos";
 import {
+  VIDEO_FORMATS,
   VIDEO_STATUSES,
+  type VideoFormat,
   type VideoStatus,
   type VideoType,
 } from "@/lib/types";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import {
   computeThisWeek,
+  thisWeekDates,
   type WeekRhythmSlot,
   type WeekSlot,
 } from "@/lib/week";
@@ -42,6 +46,11 @@ const COLUMN_LABELS: Record<VideoStatus, string> = {
 };
 
 const FILTER_KEYS: BoardFilter[] = ["all", "take", "teach", "story"];
+
+const FORMAT_LABELS: Record<VideoFormat, string> = {
+  short: "Shorts",
+  long: "Long-form",
+};
 
 /** Fractional sort key between two neighbors (seeds are gapped by 1000). */
 function between(before?: number, after?: number): number {
@@ -62,6 +71,8 @@ export function PipelineBoard({
   // Board state is authoritative for the session; server actions persist in
   // the background and we revert to a snapshot + toast on failure.
   const [videos, setVideos] = React.useState(initialVideos);
+  // Which world you're in: Shorts or Long-form. Defaults to Shorts each load.
+  const [boardFormat, setBoardFormat] = React.useState<VideoFormat>("short");
   const [filter, setFilter] = React.useState<BoardFilter>("all");
   const [search, setSearch] = React.useState("");
   const [activeId, setActiveId] = React.useState<string | null>(null);
@@ -82,6 +93,7 @@ export function PipelineBoard({
       VIDEO_STATUSES.map((s) => [s, [] as BoardVideo[]]),
     ) as Record<VideoStatus, BoardVideo[]>;
     for (const video of videos) {
+      if (video.format !== boardFormat) continue;
       if (filter !== "all" && video.type !== filter) continue;
       if (query && !video.title.toLowerCase().includes(query)) continue;
       columns[video.status].push(video);
@@ -90,12 +102,33 @@ export function PipelineBoard({
       columns[s].sort((a, b) => a.sortOrder - b.sortOrder);
     }
     return columns;
-  }, [videos, filter, search]);
+  }, [videos, boardFormat, filter, search]);
 
+  const formatCounts = React.useMemo(() => {
+    const counts: Record<VideoFormat, number> = { short: 0, long: 0 };
+    for (const video of videos) counts[video.format] += 1;
+    return counts;
+  }, [videos]);
+
+  // The rhythm is a short-form cadence; longs scheduled this week surface as
+  // their own chips beside the rhythm slots.
   const weekSlots = React.useMemo(
-    () => computeThisWeek(rhythmSlots, videos),
+    () =>
+      computeThisWeek(
+        rhythmSlots,
+        videos.filter((v) => v.format === "short"),
+      ),
     [rhythmSlots, videos],
   );
+  const weekLongs = React.useMemo(() => {
+    const dates = new Set(thisWeekDates());
+    return videos
+      .filter(
+        (v) =>
+          v.format === "long" && v.scheduledDate && dates.has(v.scheduledDate),
+      )
+      .sort((a, b) => a.scheduledDate!.localeCompare(b.scheduledDate!));
+  }, [videos]);
 
   function findContainer(id: UniqueIdentifier): VideoStatus | undefined {
     if ((VIDEO_STATUSES as readonly string[]).includes(String(id))) {
@@ -226,12 +259,15 @@ export function PipelineBoard({
       id: crypto.randomUUID(),
       title: input.title,
       type: input.type,
+      // Capture inherits the board you're looking at — filing is automatic.
+      format: boardFormat,
       status: "idea",
       scheduledDate: input.scheduledDate ?? null,
       sortOrder: minSort - 1000,
       seriesName: null,
       episodeNumber: null,
       doubleDownOf: null,
+      clipOf: null,
       flagged: false,
     };
     setVideos((prev) => [...prev, optimistic]);
@@ -241,6 +277,7 @@ export function PipelineBoard({
           id: optimistic.id,
           title: input.title,
           type: input.type,
+          format: optimistic.format,
           scheduledDate: input.scheduledDate,
         });
         if (!result.ok) throw new Error(result.error);
@@ -254,6 +291,8 @@ export function PipelineBoard({
   }
 
   function handleGhostClick(slot: WeekSlot) {
+    // Rhythm slots are short-form — jump to the Shorts board to fill one.
+    setBoardFormat("short");
     quickAddRef.current?.focusWith({
       type: slot.type,
       scheduledDate: slot.date,
@@ -278,6 +317,8 @@ export function PipelineBoard({
       if (event.key === "n") {
         event.preventDefault();
         quickAddRef.current?.focusWith();
+      } else if (event.key === "f") {
+        setBoardFormat((prev) => (prev === "short" ? "long" : "short"));
       } else if (["1", "2", "3", "4"].includes(event.key)) {
         setFilter(FILTER_KEYS[Number(event.key) - 1]);
       } else if (event.key === "Escape") {
@@ -296,7 +337,28 @@ export function PipelineBoard({
     <div className="mx-auto flex min-h-svh w-full max-w-9xl flex-col gap-5 p-5 md:h-svh md:px-8 md:py-6">
       <div className="flex flex-col gap-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <h1 className="text-xl font-semibold tracking-tight">Pipeline</h1>
+          <div className="flex flex-wrap items-center gap-4">
+            <h1 className="text-xl font-semibold tracking-tight">Pipeline</h1>
+            <ToggleGroup
+              value={[boardFormat]}
+              onValueChange={(values: unknown[]) =>
+                setBoardFormat((values[0] as VideoFormat | undefined) ?? "short")
+              }
+              variant="outline"
+              size="sm"
+              spacing={0}
+              aria-label="Format"
+            >
+              {VIDEO_FORMATS.map((f) => (
+                <ToggleGroupItem key={f} value={f} className="gap-1.5">
+                  {FORMAT_LABELS[f]}
+                  <span className="text-xs text-muted-foreground tabular-nums">
+                    {formatCounts[f]}
+                  </span>
+                </ToggleGroupItem>
+              ))}
+            </ToggleGroup>
+          </div>
           <FilterBar
             filter={filter}
             onFilterChange={setFilter}
@@ -304,7 +366,11 @@ export function PipelineBoard({
             onSearchChange={setSearch}
           />
         </div>
-        <ThisWeekRail slots={weekSlots} onGhostClick={handleGhostClick} />
+        <ThisWeekRail
+          slots={weekSlots}
+          longs={weekLongs}
+          onGhostClick={handleGhostClick}
+        />
       </div>
       <DndContext
         id="pipeline-board"

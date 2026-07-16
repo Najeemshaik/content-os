@@ -16,6 +16,14 @@ export type WeekSlot = {
 
 type SchedulableVideo = WeekSlotVideo & { scheduledDate: string | null };
 
+/** The current week's dates (Mon–Sun) as yyyy-MM-dd. */
+export function thisWeekDates(now: Date = new Date()): string[] {
+  const weekStart = startOfWeek(now, { weekStartsOn: 1 });
+  return Array.from({ length: 7 }, (_, i) =>
+    format(addDays(weekStart, i), "yyyy-MM-dd"),
+  );
+}
+
 /**
  * Resolve the current week's rhythm slots (Mon–Sun) against scheduled videos.
  * A slot is filled by a video scheduled on its date — preferring one whose

@@ -4,10 +4,11 @@ import { getFlagContext } from "@/lib/db/flags";
 import { videos } from "@/lib/db/schema";
 import {
   ReviewView,
+  type FormatStats,
   type ReviewVideo,
   type TypeHealth,
 } from "@/components/review/review-view";
-import type { VideoType } from "@/lib/types";
+import { VIDEO_FORMATS, type VideoFormat, type VideoType } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
@@ -26,12 +27,37 @@ export default function ReviewPage() {
     .orderBy(desc(videos.publishedAt))
     .all();
 
-  const { average, windowSize, flaggedIds } = getFlagContext();
+  // Baselines, flags, and health are all computed within a format — a
+  // long-form view count never touches the shorts average.
+  const stats = {} as Record<VideoFormat, FormatStats>;
+  const flaggedIds = new Set<string>();
+  for (const format of VIDEO_FORMATS) {
+    const context = getFlagContext(format);
+    const ofFormat = published.filter((v) => v.format === format);
+    stats[format] = {
+      average: context.average,
+      windowSize: context.windowSize,
+      health: (["teach", "take", "story"] as VideoType[]).map((type) => {
+        const ofType = ofFormat.filter((v) => v.type === type);
+        const metric = HEALTH_METRIC[type];
+        return {
+          type,
+          metric,
+          average:
+            ofType.length > 0
+              ? ofType.reduce((sum, v) => sum + v[metric], 0) / ofType.length
+              : null,
+        } satisfies TypeHealth;
+      }),
+    };
+    for (const id of context.flaggedIds) flaggedIds.add(id);
+  }
 
   const rows: ReviewVideo[] = published.map((v) => ({
     id: v.id,
     title: v.title,
     type: v.type,
+    format: v.format,
     publishedAt: v.publishedAt,
     views: v.views,
     likes: v.likes,
@@ -41,27 +67,5 @@ export default function ReviewPage() {
     flagged: flaggedIds.has(v.id),
   }));
 
-  const health: TypeHealth[] = (
-    ["teach", "take", "story"] as VideoType[]
-  ).map((type) => {
-    const ofType = published.filter((v) => v.type === type);
-    const metric = HEALTH_METRIC[type];
-    return {
-      type,
-      metric,
-      average:
-        ofType.length > 0
-          ? ofType.reduce((sum, v) => sum + v[metric], 0) / ofType.length
-          : null,
-    };
-  });
-
-  return (
-    <ReviewView
-      videos={rows}
-      average={average}
-      windowSize={windowSize}
-      health={health}
-    />
-  );
+  return <ReviewView videos={rows} stats={stats} />;
 }

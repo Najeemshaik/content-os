@@ -25,9 +25,15 @@ function createDb(): Db {
   sqlite.pragma("foreign_keys = ON");
 
   const db = drizzle(sqlite, { schema });
-  migrate(db, {
-    migrationsFolder: path.join(process.cwd(), "lib", "db", "migrations"),
-  });
+  const migrationsFolder = path.join(process.cwd(), "lib", "db", "migrations");
+  try {
+    migrate(db, { migrationsFolder });
+  } catch {
+    // Concurrent processes (Next build workers) can race a migration whose
+    // DDL isn't idempotent (e.g. ALTER TABLE ADD COLUMN). The loser retries:
+    // by then the winner's journal row is visible, so it's a no-op.
+    migrate(db, { migrationsFolder });
+  }
   seedIfEmpty(db);
   return db;
 }

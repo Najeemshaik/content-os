@@ -5,7 +5,12 @@ import { useRouter } from "next/navigation";
 import { Shuffle, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { createVideo } from "@/lib/actions/videos";
-import { VIDEO_TYPES, type VideoType } from "@/lib/types";
+import {
+  VIDEO_FORMATS,
+  VIDEO_TYPES,
+  type VideoFormat,
+  type VideoType,
+} from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
@@ -29,6 +34,7 @@ export function CaptureDialog({
   const router = useRouter();
   const [title, setTitle] = React.useState("");
   const [type, setType] = React.useState<VideoType>("take");
+  const [captureFormat, setCaptureFormat] = React.useState<VideoFormat>("short");
   const [sparksOpen, setSparksOpen] = React.useState(false);
   const [sparks, setSparks] = React.useState<Spark[]>([]);
   const inputRef = React.useRef<HTMLInputElement>(null);
@@ -39,6 +45,7 @@ export function CaptureDialog({
     setWasOpen(open);
     if (open) {
       setTitle("");
+      setCaptureFormat("short");
       setSparksOpen(false);
     }
   }
@@ -57,14 +64,26 @@ export function CaptureDialog({
     if (!trimmed) return;
     const id = crypto.randomUUID();
     const captured = type;
+    const format = captureFormat;
     onOpenChange(false);
     void (async () => {
       try {
-        const result = await createVideo({ id, title: trimmed, type: captured });
-        if (!result.ok) throw new Error(result.error);
-        toast.success("Captured to Ideas", {
-          action: { label: "Open", onClick: () => router.push(`/video/${id}`) },
+        const result = await createVideo({
+          id,
+          title: trimmed,
+          type: captured,
+          format,
         });
+        if (!result.ok) throw new Error(result.error);
+        toast.success(
+          format === "long" ? "Captured to Long-form ideas" : "Captured to Ideas",
+          {
+            action: {
+              label: "Open",
+              onClick: () => router.push(`/video/${id}`),
+            },
+          },
+        );
         router.refresh();
       } catch (error) {
         toast.error(
@@ -99,7 +118,10 @@ export function CaptureDialog({
             onChange={(e) => setTitle(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter") submit();
-              else if (e.key === "ArrowRight" && title === "") cycleType(1);
+              else if (e.key === "Tab") {
+                e.preventDefault();
+                setCaptureFormat((f) => (f === "short" ? "long" : "short"));
+              } else if (e.key === "ArrowRight" && title === "") cycleType(1);
               else if (e.key === "ArrowLeft" && title === "") cycleType(-1);
               else if (e.key === "ArrowDown") cycleType(1);
               else if (e.key === "ArrowUp") cycleType(-1);
@@ -123,34 +145,60 @@ export function CaptureDialog({
           </Button>
         </div>
 
-        <div className="flex items-center justify-between px-4 py-3">
-          <div
-            role="radiogroup"
-            aria-label="Type"
-            className="flex items-center gap-1"
-          >
-            {VIDEO_TYPES.map((t) => (
-              <button
-                key={t}
-                type="button"
-                role="radio"
-                aria-checked={type === t}
-                onClick={() => {
-                  setType(t);
-                  inputRef.current?.focus();
-                }}
-                className={cn(
-                  "flex items-center gap-1.5 rounded-full border border-transparent px-2.5 py-1 text-xs font-medium text-muted-foreground capitalize transition-colors hover:text-foreground",
-                  type === t && "border-border bg-card text-foreground shadow-xs",
-                )}
-              >
-                <TypeDot type={t} className={type === t ? "" : "opacity-40"} />
-                {t}
-              </button>
-            ))}
+        <div className="flex items-center justify-between gap-3 px-4 py-3">
+          <div className="flex items-center gap-3">
+            <div
+              role="radiogroup"
+              aria-label="Type"
+              className="flex items-center gap-1"
+            >
+              {VIDEO_TYPES.map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  role="radio"
+                  aria-checked={type === t}
+                  onClick={() => {
+                    setType(t);
+                    inputRef.current?.focus();
+                  }}
+                  className={cn(
+                    "flex items-center gap-1.5 rounded-full border border-transparent px-2.5 py-1 text-xs font-medium text-muted-foreground capitalize transition-colors hover:text-foreground",
+                    type === t && "border-border bg-card text-foreground shadow-xs",
+                  )}
+                >
+                  <TypeDot type={t} className={type === t ? "" : "opacity-40"} />
+                  {t}
+                </button>
+              ))}
+            </div>
+            <div
+              role="radiogroup"
+              aria-label="Format"
+              className="flex items-center rounded-full border border-border p-0.5"
+            >
+              {VIDEO_FORMATS.map((f) => (
+                <button
+                  key={f}
+                  type="button"
+                  role="radio"
+                  aria-checked={captureFormat === f}
+                  onClick={() => {
+                    setCaptureFormat(f);
+                    inputRef.current?.focus();
+                  }}
+                  className={cn(
+                    "rounded-full px-2.5 py-0.5 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground",
+                    captureFormat === f && "bg-card text-foreground shadow-xs",
+                  )}
+                >
+                  {f === "short" ? "Short" : "Long"}
+                </button>
+              ))}
+            </div>
           </div>
-          <p className="hidden items-center gap-1 text-xs text-muted-foreground sm:flex">
-            <Kbd>↑↓</Kbd> type · <Kbd>↵</Kbd> capture
+          <p className="hidden items-center gap-1 text-xs whitespace-nowrap text-muted-foreground sm:flex">
+            <Kbd>↑↓</Kbd> type · <Kbd>⇥</Kbd> format · <Kbd>↵</Kbd> capture
           </p>
         </div>
 

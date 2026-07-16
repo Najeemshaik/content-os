@@ -3,21 +3,23 @@
 import Link from "next/link";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { CalendarDays, Flame, GitBranch, ListVideo } from "lucide-react";
+import { CalendarDays, Film, Flame, GitBranch, ListVideo } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { cn } from "@/lib/utils";
-import type { VideoStatus, VideoType } from "@/lib/types";
+import type { VideoFormat, VideoStatus, VideoType } from "@/lib/types";
 
 export type BoardVideo = {
   id: string;
   title: string;
   type: VideoType;
+  format: VideoFormat;
   status: VideoStatus;
   scheduledDate: string | null;
   sortOrder: number;
   seriesName: string | null;
   episodeNumber: number | null;
   doubleDownOf: string | null;
+  clipOf: string | null;
   flagged: boolean;
 };
 
@@ -45,6 +47,19 @@ export function VideoCardContent({ video }: { video: BoardVideo }) {
         >
           {video.type}
         </span>
+        {video.clipOf && (
+          <span
+            className="inline-flex items-center gap-1 text-2xs leading-none font-medium tracking-wide text-muted-foreground uppercase"
+            title={
+              video.format === "short"
+                ? "Clipped from a long-form video"
+                : "Expanded from a short"
+            }
+          >
+            <Film className="size-3" aria-hidden />
+            {video.format === "short" ? "Clip" : "From short"}
+          </span>
+        )}
         {video.doubleDownOf && (
           <span
             className="inline-flex items-center gap-1 text-2xs leading-none font-medium tracking-wide text-muted-foreground uppercase"

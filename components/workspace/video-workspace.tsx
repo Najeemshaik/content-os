@@ -10,17 +10,26 @@ import {
   ArrowRight,
   ChartColumn,
   FilePlus2,
+  Film,
   Flame,
   GitBranch,
   History,
 } from "lucide-react";
 import { toast } from "sonner";
-import { advanceStatus, archiveVideo, updateVideo } from "@/lib/actions/videos";
+import {
+  advanceStatus,
+  archiveVideo,
+  clipToShort,
+  expandToLong,
+  updateVideo,
+} from "@/lib/actions/videos";
 import { createSnapshot } from "@/lib/actions/revisions";
 import { markStructureUsed } from "@/lib/actions/structures";
 import { runtimeLabel, wordCount } from "@/lib/script";
 import {
+  VIDEO_FORMATS,
   VIDEO_TYPES,
+  type VideoFormat,
   type VideoStatus,
   type VideoType,
 } from "@/lib/types";
@@ -66,9 +75,15 @@ const STATUS_LABELS: Record<VideoStatus, string> = {
   published: "Published",
 };
 
+const FORMAT_LABELS: Record<VideoFormat, string> = {
+  short: "Short",
+  long: "Long-form",
+};
+
 type Editable = {
   title: string;
   type: VideoType;
+  format: VideoFormat;
   status: VideoStatus;
   notes: string;
   hookVerbal: string;
@@ -96,6 +111,7 @@ function toEditable(video: Video): Editable {
   return {
     title: video.title,
     type: video.type,
+    format: video.format,
     status: video.status,
     notes: video.notes ?? "",
     hookVerbal: video.hookVerbal ?? "",
@@ -130,6 +146,8 @@ export function VideoWorkspace({
   lineage: {
     parent: { id: string; title: string } | null;
     variants: { id: string; title: string }[];
+    clipParent: { id: string; title: string; format: VideoFormat } | null;
+    clips: { id: string; title: string; format: VideoFormat }[];
   };
 }) {
   const router = useRouter();
@@ -139,6 +157,12 @@ export function VideoWorkspace({
   const [historyOpen, setHistoryOpen] = React.useState(false);
   const [archiveOpen, setArchiveOpen] = React.useState(false);
   const [advancing, startAdvance] = React.useTransition();
+  const scriptRef = React.useRef<HTMLTextAreaElement>(null);
+  const [selection, setSelection] = React.useState<{
+    start: number;
+    end: number;
+  } | null>(null);
+  const [deriving, setDeriving] = React.useState(false);
 
   const pendingRef = React.useRef<PendingPatch>({});
   const saveTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -261,6 +285,75 @@ export function VideoWorkspace({
     });
   }
 
+  // The wormhole: selected passage of a long-form script → a linked short.
+  const selectedExcerpt =
+    state.format === "long" && selection && selection.end > selection.start
+      ? state.scriptBody.slice(selection.start, selection.end).trim()
+      : "";
+
+  function syncSelection() {
+    const el = scriptRef.current;
+    if (!el) return;
+    setSelection({ start: el.selectionStart, end: el.selectionEnd });
+  }
+
+  function clip() {
+    if (!selectedExcerpt || deriving) return;
+    setDeriving(true);
+    void (async () => {
+      try {
+        await flushSave();
+        const result = await clipToShort({
+          id: video.id,
+          excerpt: selectedExcerpt,
+        });
+        if (!result.ok) throw new Error(result.error);
+        toast.success("Short clipped to Ideas", {
+          action: result.data
+            ? {
+                label: "Open",
+                onClick: () => router.push(`/video/${result.data!.id}`),
+              }
+            : undefined,
+        });
+        router.refresh();
+      } catch (error) {
+        toast.error(
+          `Couldn't clip — ${error instanceof Error ? error.message : "try again"}`,
+        );
+      } finally {
+        setDeriving(false);
+      }
+    })();
+  }
+
+  function expand() {
+    if (deriving) return;
+    setDeriving(true);
+    void (async () => {
+      try {
+        await flushSave();
+        const result = await expandToLong({ id: video.id });
+        if (!result.ok) throw new Error(result.error);
+        toast.success("Long-form card created in Ideas", {
+          action: result.data
+            ? {
+                label: "Open",
+                onClick: () => router.push(`/video/${result.data!.id}`),
+              }
+            : undefined,
+        });
+        router.refresh();
+      } catch (error) {
+        toast.error(
+          `Couldn't create — ${error instanceof Error ? error.message : "try again"}`,
+        );
+      } finally {
+        setDeriving(false);
+      }
+    })();
+  }
+
   async function archive() {
     try {
       const result = await archiveVideo({ id: video.id });
@@ -367,15 +460,55 @@ export function VideoWorkspace({
                   <span className="tabular-nums">({revisions.length})</span>
                 )}
               </Button>
+              {state.format === "long" ? (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="gap-1.5 text-muted-foreground"
+                  disabled={!selectedExcerpt || deriving}
+                  onClick={clip}
+                  title="Select a passage, then clip it into a linked short (⌘⇧S)"
+                >
+                  <Film className="size-3.5" aria-hidden />
+                  {selectedExcerpt
+                    ? `Clip ${wordCount(selectedExcerpt)} words → Short`
+                    : "Clip → Short"}
+                </Button>
+              ) : (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="gap-1.5 text-muted-foreground"
+                  disabled={deriving}
+                  onClick={expand}
+                  title="Create a linked long-form idea seeded from this short"
+                >
+                  <Film className="size-3.5" aria-hidden />
+                  Expand → Long-form
+                </Button>
+              )}
               <span className="ms-auto text-xs tabular-nums text-muted-foreground">
                 {words} {words === 1 ? "word" : "words"} · {runtimeLabel(words)}
               </span>
             </div>
             <Textarea
+              ref={scriptRef}
               value={state.scriptBody}
-              onChange={(e) =>
-                patch({ scriptBody: e.target.value }, { snapshotRelevant: true })
-              }
+              onChange={(e) => {
+                patch({ scriptBody: e.target.value }, { snapshotRelevant: true });
+                syncSelection();
+              }}
+              onSelect={syncSelection}
+              onKeyDown={(e) => {
+                if (
+                  (e.metaKey || e.ctrlKey) &&
+                  e.shiftKey &&
+                  e.key.toLowerCase() === "s"
+                ) {
+                  e.preventDefault();
+                  if (state.format === "long") clip();
+                }
+              }}
               placeholder="Write the script. Verbal hook first — say it like you'd say it on camera."
               aria-label="Script"
               className="field-sizing-content max-h-none min-h-[55svh] w-full resize-none rounded-none border-0 bg-transparent px-5 py-5 !text-base leading-7 shadow-none focus-visible:ring-0 md:px-8 dark:bg-transparent"
@@ -407,6 +540,25 @@ export function VideoWorkspace({
               Details
             </h2>
             <div className="grid grid-cols-[72px_1fr] items-center gap-x-3 gap-y-2">
+              <span className="text-xs text-muted-foreground">Format</span>
+              <Select
+                value={state.format}
+                onValueChange={(v) =>
+                  patch({ format: v as VideoFormat }, { immediate: true })
+                }
+              >
+                <SelectTrigger size="sm" aria-label="Format" className="w-full">
+                  {FORMAT_LABELS[state.format]}
+                </SelectTrigger>
+                <SelectContent>
+                  {VIDEO_FORMATS.map((f) => (
+                    <SelectItem key={f} value={f}>
+                      {FORMAT_LABELS[f]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
               <span className="text-xs text-muted-foreground">Type</span>
               <Select
                 value={state.type}
@@ -567,11 +719,14 @@ export function VideoWorkspace({
             />
           </section>
 
-          {(lineage.parent || lineage.variants.length > 0) && (
+          {(lineage.parent ||
+            lineage.variants.length > 0 ||
+            lineage.clipParent ||
+            lineage.clips.length > 0) && (
             <section className="rounded-2xl bg-card p-4 shadow-card">
               <h2 className="mb-2 flex items-center gap-1.5 text-sm font-semibold tracking-tight">
                 <GitBranch className="size-3.5" aria-hidden />
-                Lineage
+                Connections
               </h2>
               <div className="flex flex-col gap-1.5 text-sm">
                 {lineage.parent && (
@@ -593,6 +748,30 @@ export function VideoWorkspace({
                       className="font-medium text-foreground hover:underline"
                     >
                       {variant.title}
+                    </Link>
+                  </p>
+                ))}
+                {lineage.clipParent && (
+                  <p className="text-muted-foreground">
+                    {state.format === "short"
+                      ? "Clipped from"
+                      : "Expanded from"}{" "}
+                    <Link
+                      href={`/video/${lineage.clipParent.id}`}
+                      className="font-medium text-foreground hover:underline"
+                    >
+                      {lineage.clipParent.title}
+                    </Link>
+                  </p>
+                )}
+                {lineage.clips.map((child) => (
+                  <p key={child.id} className="text-muted-foreground">
+                    {child.format === "short" ? "Short clipped:" : "Expanded to:"}{" "}
+                    <Link
+                      href={`/video/${child.id}`}
+                      className="font-medium text-foreground hover:underline"
+                    >
+                      {child.title}
                     </Link>
                   </p>
                 ))}

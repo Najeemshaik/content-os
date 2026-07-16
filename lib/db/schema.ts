@@ -11,6 +11,7 @@ import {
   SERIES_STATUSES,
   SERIES_TYPES,
   STRUCTURE_CATEGORIES,
+  VIDEO_FORMATS,
   VIDEO_STATUSES,
   VIDEO_TYPES,
 } from "@/lib/types";
@@ -61,6 +62,7 @@ export const videos = sqliteTable(
     id: id(),
     title: text("title").notNull(),
     type: text("type", { enum: VIDEO_TYPES }).notNull(),
+    format: text("format", { enum: VIDEO_FORMATS }).notNull().default("short"),
     status: text("status", { enum: VIDEO_STATUSES }).notNull().default("idea"),
     notes: text("notes"),
     hookVerbal: text("hook_verbal"),
@@ -81,6 +83,9 @@ export const videos = sqliteTable(
     doubleDownOf: text("double_down_of").references(
       (): AnySQLiteColumn => videos.id,
     ),
+    // Cross-format lineage: on a short, the long it was clipped from;
+    // on a long, the short it expands.
+    clipOf: text("clip_of").references((): AnySQLiteColumn => videos.id),
     sortOrder: real("sort_order").notNull(),
     archivedAt: integer("archived_at", { mode: "number" }),
     createdAt: createdAt(),

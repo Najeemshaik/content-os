@@ -7,6 +7,7 @@ import { db } from "@/lib/db/client";
 import { videos } from "@/lib/db/schema";
 import { snapshotVideo } from "@/lib/db/revisions";
 import {
+  VIDEO_FORMATS,
   VIDEO_STATUSES,
   VIDEO_TYPES,
   type ActionResult,
@@ -38,6 +39,7 @@ const createVideoSchema = z.object({
   id: z.uuid(),
   title: z.string().trim().min(1).max(300),
   type: z.enum(VIDEO_TYPES),
+  format: z.enum(VIDEO_FORMATS).optional(),
   scheduledDate: z.iso.date().optional(),
   scriptBody: z.string().optional(),
   structureId: z.uuid().optional(),
@@ -82,6 +84,7 @@ const updateVideoSchema = z.object({
   id: z.uuid(),
   title: z.string().trim().min(1).max(300).optional(),
   type: z.enum(VIDEO_TYPES).optional(),
+  format: z.enum(VIDEO_FORMATS).optional(),
   status: z.enum(VIDEO_STATUSES).optional(),
   notes: z.string().nullable().optional(),
   hookVerbal: z.string().nullable().optional(),
@@ -207,6 +210,7 @@ export async function doubleDown(
         id,
         title: `DD: ${parent.title}`,
         type: parent.type,
+        format: parent.format,
         status: "idea",
         notes: data.plan,
         doubleDownOf: parent.id,
@@ -217,5 +221,91 @@ export async function doubleDown(
     return { ok: true, data: { id } };
   } catch (error) {
     return fail(error, "Could not create double-down card");
+  }
+}
+
+// First line of the excerpt, cut at a word boundary near 60 chars.
+function excerptTitle(excerpt: string): string {
+  const line = excerpt.trim().split("\n")[0].trim();
+  if (line.length <= 60) return line;
+  const cut = line.slice(0, 60);
+  const lastSpace = cut.lastIndexOf(" ");
+  return `${(lastSpace > 30 ? cut.slice(0, lastSpace) : cut).trimEnd()}…`;
+}
+
+const clipToShortSchema = z.object({
+  id: z.uuid(),
+  excerpt: z.string().trim().min(1).max(20000),
+  title: z.string().trim().min(1).max(300).optional(),
+});
+
+export async function clipToShort(
+  input: unknown,
+): Promise<ActionResult<{ id: string }>> {
+  try {
+    const data = clipToShortSchema.parse(input);
+    const parent = db
+      .select()
+      .from(videos)
+      .where(eq(videos.id, data.id))
+      .get();
+    if (!parent) return { ok: false, error: "Video not found" };
+    const id = crypto.randomUUID();
+    db.insert(videos)
+      .values({
+        id,
+        title: data.title ?? excerptTitle(data.excerpt),
+        type: parent.type,
+        format: "short",
+        status: "idea",
+        scriptBody: data.excerpt,
+        notes: `Clipped from “${parent.title}”.`,
+        clipOf: parent.id,
+        sortOrder: minIdeaSortOrder(),
+      })
+      .run();
+    revalidateAll();
+    return { ok: true, data: { id } };
+  } catch (error) {
+    return fail(error, "Could not clip a short");
+  }
+}
+
+export async function expandToLong(
+  input: unknown,
+): Promise<ActionResult<{ id: string }>> {
+  try {
+    const { id: sourceId } = z.object({ id: z.uuid() }).parse(input);
+    const parent = db
+      .select()
+      .from(videos)
+      .where(eq(videos.id, sourceId))
+      .get();
+    if (!parent) return { ok: false, error: "Video not found" };
+    const outline = [
+      `Expanded from the short “${parent.title}”.`,
+      parent.hookVerbal && `Hook that worked: ${parent.hookVerbal}`,
+      parent.scriptBody && `Short's script as the seed:\n${parent.scriptBody}`,
+      "Outline: widen the promise, add depth per point, keep the short's pacing in the intro.",
+    ]
+      .filter(Boolean)
+      .join("\n\n");
+    const id = crypto.randomUUID();
+    db.insert(videos)
+      .values({
+        id,
+        title: `Long: ${parent.title}`,
+        type: parent.type,
+        format: "long",
+        status: "idea",
+        notes: outline,
+        clipOf: parent.id,
+        sortOrder: minIdeaSortOrder(),
+      })
+      .run();
+    revalidateAll();
+    return { ok: true, data: { id } };
+  } catch (error) {
+    return fail(error, "Could not create the long-form card");
   }
 }

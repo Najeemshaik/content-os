@@ -1,10 +1,19 @@
 "use client";
 
 import Link from "next/link";
+import { format, parseISO } from "date-fns";
 import { Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
+import type { VideoType } from "@/lib/types";
 import type { WeekSlot } from "@/lib/week";
 import { TypeDot } from "./type-badge";
+
+export type WeekLong = {
+  id: string;
+  title: string;
+  type: VideoType;
+  scheduledDate: string | null;
+};
 
 function DayBlock({ slot }: { slot: WeekSlot }) {
   return (
@@ -24,12 +33,14 @@ function DayBlock({ slot }: { slot: WeekSlot }) {
 
 export function ThisWeekRail({
   slots,
+  longs = [],
   onGhostClick,
 }: {
   slots: WeekSlot[];
+  longs?: WeekLong[];
   onGhostClick: (slot: WeekSlot) => void;
 }) {
-  if (slots.length === 0) return null;
+  if (slots.length === 0 && longs.length === 0) return null;
   return (
     <section aria-label="This week" className="flex items-center gap-3">
       <h2 className="shrink-0 text-2xs font-semibold tracking-widest text-muted-foreground/70 uppercase">
@@ -66,6 +77,21 @@ export function ThisWeekRail({
             </button>
           ),
         )}
+        {longs.map((video) => (
+          <Link
+            key={video.id}
+            href={`/video/${video.id}`}
+            className="flex max-w-60 shrink-0 items-center gap-2.5 rounded-xl border border-border bg-transparent py-1.5 pr-3.5 pl-2.5 text-xs transition-all hover:bg-card hover:shadow-card"
+          >
+            <span className="shrink-0 text-2xs leading-none font-semibold tracking-widest text-muted-foreground uppercase">
+              Long
+              {video.scheduledDate &&
+                ` · ${format(parseISO(video.scheduledDate), "EEE")}`}
+            </span>
+            <TypeDot type={video.type} />
+            <span className="truncate font-medium">{video.title}</span>
+          </Link>
+        ))}
       </div>
     </section>
   );

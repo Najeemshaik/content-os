@@ -4,10 +4,10 @@ import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
-import { Flame, GitBranch } from "lucide-react";
+import { Film, Flame, GitBranch } from "lucide-react";
 import { toast } from "sonner";
-import { doubleDown, updateVideo } from "@/lib/actions/videos";
-import type { VideoType } from "@/lib/types";
+import { doubleDown, expandToLong, updateVideo } from "@/lib/actions/videos";
+import { VIDEO_FORMATS, type VideoFormat, type VideoType } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
@@ -28,6 +28,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { PageHeader } from "@/components/app-shell/page-header";
 import { TypeBadge } from "@/components/pipeline/type-badge";
 
@@ -35,6 +36,7 @@ export type ReviewVideo = {
   id: string;
   title: string;
   type: VideoType;
+  format: VideoFormat;
   publishedAt: number | null;
   views: number;
   likes: number;
@@ -48,6 +50,17 @@ export type TypeHealth = {
   type: VideoType;
   metric: string;
   average: number | null;
+};
+
+export type FormatStats = {
+  average: number | null;
+  windowSize: number;
+  health: TypeHealth[];
+};
+
+const FORMAT_LABELS: Record<VideoFormat, string> = {
+  short: "Shorts",
+  long: "Long-form",
 };
 
 const METRICS = ["views", "likes", "comments", "saves", "shares"] as const;
@@ -99,23 +112,67 @@ function MetricInput({
 
 export function ReviewView({
   videos,
-  average,
-  windowSize,
-  health,
+  stats,
 }: {
   videos: ReviewVideo[];
-  average: number | null;
-  windowSize: number;
-  health: TypeHealth[];
+  stats: Record<VideoFormat, FormatStats>;
 }) {
   const router = useRouter();
+  const [activeFormat, setActiveFormat] = React.useState<VideoFormat>("short");
   const [ddTarget, setDdTarget] = React.useState<ReviewVideo | null>(null);
+  const [expandingId, setExpandingId] = React.useState<string | null>(null);
+
+  const { average, windowSize, health } = stats[activeFormat];
+  const visible = videos.filter((v) => v.format === activeFormat);
+
+  function expand(video: ReviewVideo) {
+    setExpandingId(video.id);
+    void (async () => {
+      try {
+        const result = await expandToLong({ id: video.id });
+        if (!result.ok) throw new Error(result.error);
+        toast.success("Long-form card created in Ideas", {
+          action: result.data
+            ? {
+                label: "Open",
+                onClick: () => router.push(`/video/${result.data!.id}`),
+              }
+            : undefined,
+        });
+        router.refresh();
+      } catch (error) {
+        toast.error(
+          `Couldn't create — ${error instanceof Error ? error.message : "try again"}`,
+        );
+      } finally {
+        setExpandingId(null);
+      }
+    })();
+  }
 
   return (
     <div className="mx-auto flex min-h-svh w-full max-w-7xl flex-col gap-5 p-5 md:px-8 md:py-6">
       <PageHeader
         title="Review"
-        description="Log metrics after publishing — the app flags anything doing 5× your rolling average."
+        description="Log metrics after publishing — the app flags anything doing 5× your rolling average, within its format."
+        actions={
+          <ToggleGroup
+            value={[activeFormat]}
+            onValueChange={(values: unknown[]) =>
+              setActiveFormat((values[0] as VideoFormat | undefined) ?? "short")
+            }
+            variant="outline"
+            size="sm"
+            spacing={0}
+            aria-label="Format"
+          >
+            {VIDEO_FORMATS.map((f) => (
+              <ToggleGroupItem key={f} value={f}>
+                {FORMAT_LABELS[f]}
+              </ToggleGroupItem>
+            ))}
+          </ToggleGroup>
+        }
       />
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -150,10 +207,10 @@ export function ReviewView({
         ))}
       </div>
 
-      {videos.length === 0 ? (
+      {visible.length === 0 ? (
         <p className="rounded-2xl bg-muted/50 px-4 py-8 text-center text-sm text-muted-foreground">
-          Nothing published yet — metrics land here once you mark a video
-          published.
+          No published {FORMAT_LABELS[activeFormat].toLowerCase()} yet —
+          metrics land here once you mark one published.
         </p>
       ) : (
         <div className="overflow-x-auto rounded-2xl bg-card shadow-card">
@@ -172,7 +229,7 @@ export function ReviewView({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {videos.map((video) => (
+              {visible.map((video) => (
                 <TableRow
                   key={video.id}
                   className={cn(video.flagged && "bg-flag/4")}
@@ -211,15 +268,29 @@ export function ReviewView({
                   ))}
                   <TableCell>
                     {video.flagged && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="gap-1.5 whitespace-nowrap"
-                        onClick={() => setDdTarget(video)}
-                      >
-                        <GitBranch className="size-3.5" aria-hidden />
-                        Double down
-                      </Button>
+                      <div className="flex justify-end gap-1.5">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="gap-1.5 whitespace-nowrap"
+                          onClick={() => setDdTarget(video)}
+                        >
+                          <GitBranch className="size-3.5" aria-hidden />
+                          Double down
+                        </Button>
+                        {video.format === "short" && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="gap-1.5 whitespace-nowrap"
+                            disabled={expandingId === video.id}
+                            onClick={() => expand(video)}
+                          >
+                            <Film className="size-3.5" aria-hidden />
+                            Expand → long
+                          </Button>
+                        )}
+                      </div>
                     )}
                   </TableCell>
                 </TableRow>

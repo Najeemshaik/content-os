@@ -3,6 +3,9 @@ import { z } from "zod";
 export const VIDEO_TYPES = ["take", "teach", "story"] as const;
 export type VideoType = (typeof VIDEO_TYPES)[number];
 
+export const VIDEO_FORMATS = ["short", "long"] as const;
+export type VideoFormat = (typeof VIDEO_FORMATS)[number];
+
 export const VIDEO_STATUSES = [
   "idea",
   "scripted",
@@ -30,6 +33,7 @@ export const OUTLIER_STATUSES = ["unprocessed", "templatized"] as const;
 export type OutlierStatus = (typeof OUTLIER_STATUSES)[number];
 
 export const videoTypeSchema = z.enum(VIDEO_TYPES);
+export const videoFormatSchema = z.enum(VIDEO_FORMATS);
 export const videoStatusSchema = z.enum(VIDEO_STATUSES);
 
 export type ActionResult<T = void> =

@@ -62,7 +62,22 @@ export default async function VideoPage(props: PageProps<"/video/[id]">) {
     .where(eq(videos.doubleDownOf, id))
     .all();
 
-  const { flaggedIds } = getFlagContext();
+  // Cross-format lineage: the video this one was clipped/expanded from, and
+  // the videos derived from this one.
+  const clipParent = video.clipOf
+    ? (db
+        .select({ id: videos.id, title: videos.title, format: videos.format })
+        .from(videos)
+        .where(eq(videos.id, video.clipOf))
+        .get() ?? null)
+    : null;
+  const clips = db
+    .select({ id: videos.id, title: videos.title, format: videos.format })
+    .from(videos)
+    .where(eq(videos.clipOf, id))
+    .all();
+
+  const { flaggedIds } = getFlagContext(video.format);
 
   return (
     <VideoWorkspace
@@ -72,7 +87,7 @@ export default async function VideoPage(props: PageProps<"/video/[id]">) {
       outliers={outlierHooks}
       revisions={revisions}
       flagged={flaggedIds.has(id)}
-      lineage={{ parent, variants }}
+      lineage={{ parent, variants, clipParent, clips }}
     />
   );
 }

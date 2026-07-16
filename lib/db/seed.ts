@@ -1,6 +1,6 @@
 import type { BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
 import * as schema from "./schema";
-import type { VideoType } from "@/lib/types";
+import type { VideoFormat, VideoType } from "@/lib/types";
 
 type Db = BetterSQLite3Database<typeof schema>;
 
@@ -34,7 +34,12 @@ const RHYTHM_SLOTS: (typeof schema.rhythmSlots.$inferInsert)[] = [
   { weekday: 6, type: "story" },
 ];
 
-const SEED_VIDEOS: { type: VideoType; title: string; notes: string }[] = [
+const SEED_VIDEOS: {
+  type: VideoType;
+  format?: VideoFormat;
+  title: string;
+  notes: string;
+}[] = [
   {
     type: "take",
     title:
@@ -106,6 +111,20 @@ const SEED_VIDEOS: { type: VideoType; title: string; notes: string }[] = [
     type: "story",
     title: "What a build session actually looks like",
     notes: "Lectures by day, desk by night. B-roll heavy.",
+  },
+  {
+    type: "teach",
+    format: "long",
+    title: "My full AI building stack, explained end to end",
+    notes:
+      "Long-form deep dive. Chapters: capture → scripting → build → polish. Clip shorts out of each chapter while scripting.",
+  },
+  {
+    type: "story",
+    format: "long",
+    title: "30 days of daily posting — everything I learned",
+    notes:
+      "Long-form retro. Numbers, what flopped, what 5×'d. Each lesson is a candidate short.",
   },
 ];
 

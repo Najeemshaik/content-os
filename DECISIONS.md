@@ -61,3 +61,16 @@ Judgment calls made while building, per the PRD's instruction to decide and log 
 - **Stage columns have icons** (idea/scripted/production/published) and dashed ghost empty states; quick-add renders as a ghost card that solidifies on focus.
 - **Calendar week view gained a weekday header row** (with a "Today" marker and tinted today column); cells fill the viewport height.
 - **Filters are a connected segmented control** with type dots (ToggleGroup `spacing={0}`).
+
+## Format axis (shorts vs long-form) + clip wormhole
+
+- **`format` is a second first-class axis mirroring `type`** — same enum-tuple pattern (`VIDEO_FORMATS` in `lib/types.ts`), same pipeline stages, same workspace. Two views, not two silos.
+- **One `clip_of` self-FK covers both directions** of cross-format lineage: on a short it means "clipped from that long", on a long "expanded from that short". The UI labels by comparing formats; `double_down_of` stays separate (same-format variation is a different relationship).
+- **Capture inherits context**: board quick-add files to the active board's format; ⌘K defaults to short (capture speed wins) with Tab toggling Short/Long; the calendar day peek defaults to short (rhythm context).
+- **The board defaults to Shorts each load**; `f` toggles. localStorage persistence deferred (SSR-hydration cost outweighs it for a two-option toggle).
+- **Clicking a rhythm ghost switches to the Shorts board** — rhythm slots are short-form by definition. Long-form videos scheduled this week appear as separate outline "Long" chips on the rail, visible from either board.
+- **Flagging and rolling averages are format-scoped** (`getFlagContext(format)`): a 200k-view long would otherwise poison the shorts baseline and vice versa. The board unions both formats' flag sets for flames.
+- **Clip is non-destructive**: the selected passage is copied into the new short's script; the long-form script is untouched. Title = first line of the excerpt cut at a word boundary (~60 chars).
+- **Expand seeds an outline** from the short's verbal hook + script rather than copying the script as-is — a long is a rewrite, not a paste.
+- **Calendar rhythm ghosts hide on the Long filter** and are only satisfied by scheduled *shorts* of the slot's type.
+- **Old export files import cleanly**: rows missing `format` take the column default (`short`); envelope stays version 1.

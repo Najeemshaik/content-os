@@ -14,6 +14,7 @@ export default function CalendarPage() {
       id: videos.id,
       title: videos.title,
       type: videos.type,
+      format: videos.format,
       status: videos.status,
       scheduledDate: videos.scheduledDate,
     })

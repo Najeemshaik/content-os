@@ -38,7 +38,9 @@ import { toast } from "sonner";
 import { createVideo, scheduleVideo } from "@/lib/actions/videos";
 import { cn } from "@/lib/utils";
 import {
+  VIDEO_FORMATS,
   VIDEO_TYPES,
+  type VideoFormat,
   type VideoStatus,
   type VideoType,
 } from "@/lib/types";
@@ -64,8 +66,17 @@ export type CalendarVideo = {
   id: string;
   title: string;
   type: VideoType;
+  format: VideoFormat;
   status: VideoStatus;
   scheduledDate: string | null;
+};
+
+type FormatFilter = "all" | VideoFormat;
+
+const FORMAT_FILTER_LABELS: Record<FormatFilter, string> = {
+  all: "All",
+  short: "Shorts",
+  long: "Long",
 };
 
 export type CalendarRhythmSlot = {
@@ -125,6 +136,11 @@ function WeekChip({
         >
           {video.type}
         </span>
+        {video.format === "long" && (
+          <span className="rounded-sm bg-muted px-1 py-px text-2xs leading-none font-semibold tracking-widest text-muted-foreground uppercase">
+            Long
+          </span>
+        )}
         {overdue && (
           <span className="inline-flex items-center gap-1 text-2xs leading-none font-medium text-destructive">
             <TriangleAlert className="size-3" aria-hidden />
@@ -155,6 +171,14 @@ function MonthChip({
       )}
     >
       <TypeDot type={video.type} className="size-1.5" />
+      {video.format === "long" && (
+        <span
+          className="shrink-0 text-2xs leading-none font-semibold tracking-widest text-muted-foreground uppercase"
+          aria-label="Long-form"
+        >
+          L
+        </span>
+      )}
       {overdue && (
         <TriangleAlert className="size-3 shrink-0" aria-label="Overdue" />
       )}
@@ -382,6 +406,7 @@ export function CalendarView({
 }) {
   const router = useRouter();
   const [videos, setVideos] = React.useState(initialVideos);
+  const [formatFilter, setFormatFilter] = React.useState<FormatFilter>("all");
   const [view, setView] = React.useState<"week" | "month">("week");
   const [anchor, setAnchor] = React.useState(() => new Date());
   const [activeId, setActiveId] = React.useState<string | null>(null);
@@ -408,23 +433,29 @@ export function CalendarView({
     const map = new Map<string, CalendarVideo[]>();
     for (const video of videos) {
       if (!video.scheduledDate) continue;
+      if (formatFilter !== "all" && video.format !== formatFilter) continue;
       const list = map.get(video.scheduledDate) ?? [];
       list.push(video);
       map.set(video.scheduledDate, list);
     }
     return map;
-  }, [videos]);
+  }, [videos, formatFilter]);
 
   const tray = React.useMemo(
     () =>
       videos
-        .filter((v) => !v.scheduledDate && v.status !== "published")
+        .filter(
+          (v) =>
+            !v.scheduledDate &&
+            v.status !== "published" &&
+            (formatFilter === "all" || v.format === formatFilter),
+        )
         .sort(
           (a, b) =>
             STATUS_RANK[a.status] - STATUS_RANK[b.status] ||
             a.title.localeCompare(b.title),
         ),
-    [videos],
+    [videos, formatFilter],
   );
 
   const { setNodeRef: setTrayRef, isOver: trayOver } = useDroppable({
@@ -432,11 +463,19 @@ export function CalendarView({
   });
 
   function ghostsFor(date: Date): CalendarRhythmSlot[] {
-    const scheduled = byDate.get(iso(date)) ?? [];
+    // The rhythm is a short-form cadence: ghosts hide on the Long filter, and
+    // only a scheduled short satisfies a slot (regardless of active filter).
+    if (formatFilter === "long") return [];
+    const dateIso = iso(date);
     return rhythmSlots.filter(
       (slot) =>
         slot.weekday === date.getDay() &&
-        !scheduled.some((v) => v.type === slot.type),
+        !videos.some(
+          (v) =>
+            v.scheduledDate === dateIso &&
+            v.format === "short" &&
+            v.type === slot.type,
+        ),
     );
   }
 
@@ -492,6 +531,22 @@ export function CalendarView({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-xl font-semibold tracking-tight">Calendar</h1>
         <div className="flex flex-wrap items-center gap-2">
+          <ToggleGroup
+            value={[formatFilter]}
+            onValueChange={(values: unknown[]) =>
+              setFormatFilter((values[0] as FormatFilter | undefined) ?? "all")
+            }
+            variant="outline"
+            size="sm"
+            spacing={0}
+            aria-label="Format"
+          >
+            {(["all", ...VIDEO_FORMATS] as FormatFilter[]).map((f) => (
+              <ToggleGroupItem key={f} value={f}>
+                {FORMAT_FILTER_LABELS[f]}
+              </ToggleGroupItem>
+            ))}
+          </ToggleGroup>
           <ToggleGroup
             value={[view]}
             onValueChange={(values: unknown[]) =>
@@ -686,6 +741,7 @@ function DayPeek({
       rhythmSlots.find((s) => s.weekday === parsed.getDay())?.type) ||
     "take";
   const [type, setType] = React.useState<VideoType>(defaultType);
+  const [addFormat, setAddFormat] = React.useState<VideoFormat>("short");
 
   // Reset when the peek opens for a different day (render-adjust pattern).
   const [lastDate, setLastDate] = React.useState<string | null>(null);
@@ -693,13 +749,21 @@ function DayPeek({
     setLastDate(date);
     setTitle("");
     setType(defaultType);
+    setAddFormat("short");
   }
 
   function add() {
     const trimmed = title.trim();
     if (!trimmed || !date) return;
     const id = crypto.randomUUID();
-    onCreated({ id, title: trimmed, type, status: "idea", scheduledDate: date });
+    onCreated({
+      id,
+      title: trimmed,
+      type,
+      format: addFormat,
+      status: "idea",
+      scheduledDate: date,
+    });
     setTitle("");
     void (async () => {
       try {
@@ -707,6 +771,7 @@ function DayPeek({
           id,
           title: trimmed,
           type,
+          format: addFormat,
           scheduledDate: date,
         });
         if (!result.ok) throw new Error(result.error);
@@ -774,6 +839,18 @@ function DayPeek({
                   {t}
                 </SelectItem>
               ))}
+            </SelectContent>
+          </Select>
+          <Select
+            value={addFormat}
+            onValueChange={(v) => setAddFormat(v as VideoFormat)}
+          >
+            <SelectTrigger size="sm" aria-label="Format">
+              {addFormat === "short" ? "Short" : "Long"}
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="short">Short</SelectItem>
+              <SelectItem value="long">Long</SelectItem>
             </SelectContent>
           </Select>
           <Button size="sm" onClick={add}>

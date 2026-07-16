@@ -13,11 +13,13 @@ export default function PipelinePage() {
       id: videos.id,
       title: videos.title,
       type: videos.type,
+      format: videos.format,
       status: videos.status,
       scheduledDate: videos.scheduledDate,
       sortOrder: videos.sortOrder,
       episodeNumber: videos.episodeNumber,
       doubleDownOf: videos.doubleDownOf,
+      clipOf: videos.clipOf,
       seriesName: series.name,
     })
     .from(videos)
@@ -35,7 +37,11 @@ export default function PipelinePage() {
     .from(rhythmSlots)
     .all();
 
-  const { flaggedIds } = getFlagContext();
+  // Flags are format-scoped; the board shows both formats' flames.
+  const flaggedIds = new Set([
+    ...getFlagContext("short").flaggedIds,
+    ...getFlagContext("long").flaggedIds,
+  ]);
   const boardVideos: BoardVideo[] = rows.map((row) => ({
     ...row,
     flagged: flaggedIds.has(row.id),
