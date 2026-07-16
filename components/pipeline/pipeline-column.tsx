@@ -29,12 +29,14 @@ export function PipelineColumn({
   videos,
   onOpen,
   header,
+  className,
 }: {
   status: VideoStatus;
   label: string;
   videos: BoardVideo[];
   onOpen: (id: string) => void;
   header?: React.ReactNode;
+  className?: string;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: status });
   const { icon: Icon, hint } = STAGE_META[status];
@@ -43,18 +45,20 @@ export function PipelineColumn({
     <section
       aria-label={`${label} column`}
       className={cn(
-        "flex w-72 shrink-0 flex-col rounded-2xl bg-muted/50 transition-colors md:w-auto md:min-w-0 md:flex-1",
+        "flex w-full flex-col rounded-2xl bg-muted/50 transition-colors md:w-auto md:min-w-0 md:flex-1",
         isOver && "bg-accent/80",
+        className,
       )}
     >
-      <header className="flex items-center gap-2 px-4 pt-3.5 pb-2.5">
+      {/* Hidden on mobile — the stage tabs above the board carry this. */}
+      <header className="hidden items-center gap-2 px-4 pt-3.5 pb-2.5 md:flex">
         <Icon className="size-3.5 text-muted-foreground/70" aria-hidden />
         <h2 className="text-sm font-semibold tracking-tight">{label}</h2>
         <span className="ms-auto rounded-full bg-background px-2 py-0.5 text-xs font-medium tabular-nums text-muted-foreground shadow-xs">
           {videos.length}
         </span>
       </header>
-      <div className="flex min-h-0 flex-1 flex-col px-2 pb-2">
+      <div className="flex min-h-0 flex-1 flex-col px-2 pt-2 pb-2 md:pt-0">
         {header && <div className="px-1 pb-2">{header}</div>}
         <SortableContext
           items={videos.map((v) => v.id)}

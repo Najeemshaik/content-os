@@ -11,7 +11,10 @@ export default function AppLayout({
       <div className="flex min-h-svh flex-col md:flex-row">
         <Sidebar />
         <MobileNav />
-        <main className="min-w-0 flex-1">{children}</main>
+        {/* Bottom padding clears the fixed mobile tab bar. */}
+        <main className="min-w-0 flex-1 pb-[calc(4rem+env(safe-area-inset-bottom))] md:pb-0">
+          {children}
+        </main>
       </div>
       <GlobalOverlays />
     </>

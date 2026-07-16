@@ -17,6 +17,7 @@ import {
 } from "@dnd-kit/core";
 import { sortableKeyboardCoordinates } from "@dnd-kit/sortable";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 import { createVideo, moveVideo } from "@/lib/actions/videos";
 import {
   VIDEO_FORMATS,
@@ -73,6 +74,8 @@ export function PipelineBoard({
   const [videos, setVideos] = React.useState(initialVideos);
   // Which world you're in: Shorts or Long-form. Defaults to Shorts each load.
   const [boardFormat, setBoardFormat] = React.useState<VideoFormat>("short");
+  // On phones the board shows one stage at a time behind these tabs.
+  const [mobileStage, setMobileStage] = React.useState<VideoStatus>("idea");
   const [filter, setFilter] = React.useState<BoardFilter>("all");
   const [search, setSearch] = React.useState("");
   const [activeId, setActiveId] = React.useState<string | null>(null);
@@ -371,6 +374,31 @@ export function PipelineBoard({
           longs={weekLongs}
           onGhostClick={handleGhostClick}
         />
+        {/* Mobile stage tabs — the four columns collapse to one at a time. */}
+        <div
+          role="tablist"
+          aria-label="Stage"
+          className="grid grid-cols-4 gap-1 rounded-xl bg-muted/60 p-1 md:hidden"
+        >
+          {VIDEO_STATUSES.map((status) => (
+            <button
+              key={status}
+              type="button"
+              role="tab"
+              aria-selected={mobileStage === status}
+              onClick={() => setMobileStage(status)}
+              className={cn(
+                "flex flex-col items-center rounded-lg py-1.5 text-xs font-medium text-muted-foreground",
+                mobileStage === status && "bg-card text-foreground shadow-xs",
+              )}
+            >
+              {COLUMN_LABELS[status]}
+              <span className="text-2xs tabular-nums opacity-60">
+                {visible[status].length}
+              </span>
+            </button>
+          ))}
+        </div>
       </div>
       <DndContext
         id="pipeline-board"
@@ -381,7 +409,7 @@ export function PipelineBoard({
         onDragEnd={handleDragEnd}
         onDragCancel={handleDragCancel}
       >
-        <div className="flex flex-1 items-stretch gap-3 overflow-x-auto md:grid md:min-h-0 md:grid-cols-4 md:overflow-y-auto">
+        <div className="flex flex-1 items-stretch gap-3 md:grid md:min-h-0 md:grid-cols-4 md:overflow-y-auto">
           {VIDEO_STATUSES.map((status) => (
             <PipelineColumn
               key={status}
@@ -389,6 +417,7 @@ export function PipelineBoard({
               label={COLUMN_LABELS[status]}
               videos={visible[status]}
               onOpen={openVideo}
+              className={mobileStage === status ? "flex" : "hidden md:flex"}
               header={
                 status === "idea" ? (
                   <QuickAdd ref={quickAddRef} onAdd={handleAdd} />
