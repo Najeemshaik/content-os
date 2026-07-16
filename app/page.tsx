@@ -1,5 +1,6 @@
 import { asc, eq, isNull } from "drizzle-orm";
 import { db } from "@/lib/db/client";
+import { getFlagContext } from "@/lib/db/flags";
 import { rhythmSlots, series, videos } from "@/lib/db/schema";
 import { PipelineBoard } from "@/components/pipeline/pipeline-board";
 import type { BoardVideo } from "@/components/pipeline/video-card";
@@ -16,6 +17,7 @@ export default function PipelinePage() {
       scheduledDate: videos.scheduledDate,
       sortOrder: videos.sortOrder,
       episodeNumber: videos.episodeNumber,
+      doubleDownOf: videos.doubleDownOf,
       seriesName: series.name,
     })
     .from(videos)
@@ -33,10 +35,10 @@ export default function PipelinePage() {
     .from(rhythmSlots)
     .all();
 
-  // 5×-flame flagging arrives with the Review module (Phase 6).
+  const { flaggedIds } = getFlagContext();
   const boardVideos: BoardVideo[] = rows.map((row) => ({
     ...row,
-    flagged: false,
+    flagged: flaggedIds.has(row.id),
   }));
 
   return <PipelineBoard initialVideos={boardVideos} rhythmSlots={slots} />;

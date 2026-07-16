@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
 import { Sidebar, MobileNav } from "@/components/app-shell/sidebar";
+import { GlobalOverlays } from "@/components/app-shell/global-overlays";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -43,6 +44,7 @@ export default function RootLayout({
             <MobileNav />
             <main className="min-w-0 flex-1">{children}</main>
           </div>
+          <GlobalOverlays />
           <Toaster />
         </ThemeProvider>
       </body>

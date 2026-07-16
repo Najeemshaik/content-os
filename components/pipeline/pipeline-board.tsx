@@ -231,6 +231,7 @@ export function PipelineBoard({
       sortOrder: minSort - 1000,
       seriesName: null,
       episodeNumber: null,
+      doubleDownOf: null,
       flagged: false,
     };
     setVideos((prev) => [...prev, optimistic]);
@@ -292,10 +293,10 @@ export function PipelineBoard({
     : null;
 
   return (
-    <div className="flex min-h-svh flex-col gap-6 p-6 md:h-svh md:p-8">
-      <div className="flex flex-col gap-4">
+    <div className="flex min-h-svh flex-col gap-5 p-5 md:h-svh md:px-8 md:py-6">
+      <div className="flex flex-col gap-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <h1 className="text-lg font-semibold tracking-tight">Pipeline</h1>
+          <h1 className="text-xl font-semibold tracking-tight">Pipeline</h1>
           <FilterBar
             filter={filter}
             onFilterChange={setFilter}
@@ -314,7 +315,7 @@ export function PipelineBoard({
         onDragEnd={handleDragEnd}
         onDragCancel={handleDragCancel}
       >
-        <div className="flex flex-1 items-stretch gap-4 overflow-x-auto md:min-h-0 md:grid md:grid-cols-4 md:overflow-y-auto">
+        <div className="flex flex-1 items-stretch gap-3 overflow-x-auto md:grid md:min-h-0 md:grid-cols-4 md:overflow-y-auto">
           {VIDEO_STATUSES.map((status) => (
             <PipelineColumn
               key={status}

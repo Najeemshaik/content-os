@@ -32,3 +32,22 @@ Judgment calls made while building, per the PRD's instruction to decide and log 
 - **Card click vs. drag**: PointerSensor `distance: 6` activation + a just-dragged guard lets plain clicks open the workspace; the card title is a real link for keyboard users (keydown stops propagation so Enter doesn't lift the card).
 - **⌘K quick-capture palette + Spark panel ship with Phase 2**, where the PRD's phase list places them; Phase 1's capture is the Idea-column quick-add.
 - **Pages that read the DB set `dynamic = "force-dynamic"`** so nothing is frozen at build time.
+
+## Phases 2–7 (workspace, calendar, banks, series, review, polish)
+
+- **Workspace state is local-first**: one editable state object, all writes funnel through a `patch()` helper — text fields debounce 500ms, selects/date save immediately, everything flushes on blur/unmount/beforeunload. Failed saves re-queue their fields and retry on the next edit.
+- **Revision restore returns the restored fields from the action** and applies them to local state directly — prop-based resync would fight the autosave and remount the editor mid-typing.
+- **Snapshot triggers**: idle 60s after script/hook changes (client timer → `createSnapshot`), on every stage advance, and before every restore. Status changes via the header *select* don't snapshot — only the advance button does (the select is a correction tool).
+- **5× flagging uses a leave-one-out average**: each video is compared against the average of the *other* videos in the rolling window. Including a breakout video in its own baseline made flagging mathematically impossible with a small window (e.g. 3 published: v ≥ 5·(v+rest)/3 has no solution).
+- **Templatize marks the outlier `templatized` when the structure is actually created**, not when the form opens — cancelling leaves the outlier untouched (tightens the PRD's letter to its intent).
+- **"Use in new video"** derives the video type from the structure category (educational→teach, storytelling→story, else take).
+- **Next episode type** = the type of the series' latest episode, falling back to `story` (series types daily/progress/lesson/custom aren't video types).
+- **Calendar tray excludes published videos** — nothing to schedule after publishing; statuses rank production > scripted > idea.
+- **Day-peek quick-add defaults its type to the day's rhythm slot.**
+- **Rhythm editor is one slot per weekday** (select take/teach/story/rest) — the schema still allows multiples, the UI keeps the default shape.
+- **Deletes detach, never cascade** (except revisions): deleting a structure/series nulls references so videos keep their scripts and episodes become standalone.
+- **Import validates the envelope with zod and trusts the DB schema for row shapes** — everything runs in one transaction, so a bad file rolls back completely.
+- **⌘K capture closes on Enter** (capture-and-go under 5s); the toast carries an "Open" action for immediate scripting.
+- **Spark uses `Math.random()` client-side only** — pure combinatorics from the PRD's static lists, deduped, 3×3 grid, shuffleable.
+- **Base UI quirk**: `SelectValue` renders the raw value, not the item label — triggers render their own labels where they differ.
+- **shadcn's CommandDialog no longer wraps children in `<Command>`** — pickers must include it themselves.

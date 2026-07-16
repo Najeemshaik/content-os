@@ -1,11 +1,21 @@
+import { desc } from "drizzle-orm";
+import { db } from "@/lib/db/client";
+import { outliers, structures } from "@/lib/db/schema";
+import { BanksView } from "@/components/banks/banks-view";
+
+export const dynamic = "force-dynamic";
+
 export default function BanksPage() {
-  return (
-    <div className="p-8">
-      <h1 className="text-lg font-semibold tracking-tight">Banks</h1>
-      <p className="mt-2 text-sm text-muted-foreground">
-        Ships in Phase 4 — save outliers and templatize them into script
-        structures here.
-      </p>
-    </div>
-  );
+  const outlierRows = db
+    .select()
+    .from(outliers)
+    .orderBy(desc(outliers.createdAt))
+    .all();
+  const structureRows = db
+    .select()
+    .from(structures)
+    .orderBy(desc(structures.timesUsed), desc(structures.createdAt))
+    .all();
+
+  return <BanksView outliers={outlierRows} structures={structureRows} />;
 }

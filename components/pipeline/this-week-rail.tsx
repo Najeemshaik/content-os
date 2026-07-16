@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
+import { Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { WeekSlot } from "@/lib/week";
-import { TypeBadge } from "./type-badge";
+import { TypeDot } from "./type-badge";
 
 export function ThisWeekRail({
   slots,
@@ -15,7 +16,7 @@ export function ThisWeekRail({
   if (slots.length === 0) return null;
   return (
     <section aria-label="This week" className="flex flex-col gap-2">
-      <h2 className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+      <h2 className="text-xs font-medium tracking-widest text-muted-foreground/80 uppercase">
         This week
       </h2>
       <div className="flex gap-2 overflow-x-auto pb-1">
@@ -25,15 +26,15 @@ export function ThisWeekRail({
               key={slot.slotId}
               href={`/video/${slot.video.id}`}
               className={cn(
-                "flex max-w-52 shrink-0 items-center gap-2 rounded-md border bg-card px-2.5 py-1.5 text-xs transition-colors hover:bg-accent",
-                slot.isToday && "ring-1 ring-ring/40",
+                "flex max-w-56 shrink-0 items-center gap-2.5 rounded-xl bg-card py-2 pr-3.5 pl-2.5 text-xs shadow-card transition-shadow hover:shadow-card-hover",
+                slot.isToday && "ring-2 ring-ring/30",
               )}
             >
-              <span className="font-medium text-muted-foreground">
-                {slot.dayLabel}
+              <span className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-muted text-xs leading-none font-semibold text-muted-foreground">
+                {slot.dayLabel.slice(0, 2)}
               </span>
-              <TypeBadge type={slot.video.type} />
-              <span className="truncate">{slot.video.title}</span>
+              <TypeDot type={slot.video.type} />
+              <span className="truncate font-medium">{slot.video.title}</span>
             </Link>
           ) : (
             <button
@@ -41,12 +42,19 @@ export function ThisWeekRail({
               type="button"
               onClick={() => onGhostClick(slot)}
               className={cn(
-                "flex shrink-0 items-center gap-2 rounded-md border border-dashed px-2.5 py-1.5 text-xs text-muted-foreground transition-colors hover:border-solid hover:bg-accent hover:text-foreground",
-                slot.isToday && "ring-1 ring-ring/40",
+                "group flex shrink-0 items-center gap-2.5 rounded-xl border border-dashed border-border bg-transparent py-2 pr-3.5 pl-2.5 text-xs text-muted-foreground transition-colors hover:border-solid hover:bg-card hover:text-foreground hover:shadow-card",
+                slot.isToday && "ring-2 ring-ring/30",
               )}
             >
-              <span className="font-medium">{slot.dayLabel}</span>
+              <span className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-muted/70 text-xs leading-none font-semibold">
+                {slot.dayLabel.slice(0, 2)}
+              </span>
+              <TypeDot type={slot.type} className="opacity-50" />
               <span className="capitalize">{slot.type} due</span>
+              <Plus
+                className="size-3 opacity-0 transition-opacity group-hover:opacity-60"
+                aria-hidden
+              />
             </button>
           ),
         )}

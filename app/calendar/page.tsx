@@ -1,10 +1,35 @@
+import { asc, isNull } from "drizzle-orm";
+import { db } from "@/lib/db/client";
+import { rhythmSlots, videos } from "@/lib/db/schema";
+import {
+  CalendarView,
+  type CalendarVideo,
+} from "@/components/calendar/calendar-view";
+
+export const dynamic = "force-dynamic";
+
 export default function CalendarPage() {
-  return (
-    <div className="p-8">
-      <h1 className="text-lg font-semibold tracking-tight">Calendar</h1>
-      <p className="mt-2 text-sm text-muted-foreground">
-        Ships in Phase 3 — schedule videos against your weekly rhythm here.
-      </p>
-    </div>
-  );
+  const rows: CalendarVideo[] = db
+    .select({
+      id: videos.id,
+      title: videos.title,
+      type: videos.type,
+      status: videos.status,
+      scheduledDate: videos.scheduledDate,
+    })
+    .from(videos)
+    .where(isNull(videos.archivedAt))
+    .orderBy(asc(videos.sortOrder))
+    .all();
+
+  const slots = db
+    .select({
+      id: rhythmSlots.id,
+      weekday: rhythmSlots.weekday,
+      type: rhythmSlots.type,
+    })
+    .from(rhythmSlots)
+    .all();
+
+  return <CalendarView initialVideos={rows} rhythmSlots={slots} />;
 }

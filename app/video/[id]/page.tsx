@@ -1,10 +1,15 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft } from "lucide-react";
-import { eq } from "drizzle-orm";
+import { asc, desc, eq } from "drizzle-orm";
 import { db } from "@/lib/db/client";
-import { videos } from "@/lib/db/schema";
-import { TypeBadge } from "@/components/pipeline/type-badge";
+import { getFlagContext } from "@/lib/db/flags";
+import {
+  outliers,
+  scriptRevisions,
+  series,
+  structures,
+  videos,
+} from "@/lib/db/schema";
+import { VideoWorkspace } from "@/components/workspace/video-workspace";
 
 export const dynamic = "force-dynamic";
 
@@ -13,30 +18,61 @@ export default async function VideoPage(props: PageProps<"/video/[id]">) {
   const video = db.select().from(videos).where(eq(videos.id, id)).get();
   if (!video) notFound();
 
+  const seriesOptions = db
+    .select({ id: series.id, name: series.name })
+    .from(series)
+    .orderBy(asc(series.name))
+    .all();
+
+  const allStructures = db
+    .select()
+    .from(structures)
+    .orderBy(asc(structures.name))
+    .all();
+
+  const outlierHooks = db
+    .select({
+      id: outliers.id,
+      creator: outliers.creator,
+      niche: outliers.niche,
+      hookVerbal: outliers.hookVerbal,
+      hookWritten: outliers.hookWritten,
+      hookVisual: outliers.hookVisual,
+    })
+    .from(outliers)
+    .all();
+
+  const revisions = db
+    .select()
+    .from(scriptRevisions)
+    .where(eq(scriptRevisions.videoId, id))
+    .orderBy(desc(scriptRevisions.createdAt))
+    .all();
+
+  const parent = video.doubleDownOf
+    ? (db
+        .select({ id: videos.id, title: videos.title })
+        .from(videos)
+        .where(eq(videos.id, video.doubleDownOf))
+        .get() ?? null)
+    : null;
+  const variants = db
+    .select({ id: videos.id, title: videos.title })
+    .from(videos)
+    .where(eq(videos.doubleDownOf, id))
+    .all();
+
+  const { flaggedIds } = getFlagContext();
+
   return (
-    <div className="mx-auto flex max-w-3xl flex-col gap-4 p-6 md:p-8">
-      <Link
-        href="/"
-        className="inline-flex w-fit items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
-      >
-        <ArrowLeft className="size-4" aria-hidden />
-        Pipeline
-      </Link>
-      <div className="flex items-center gap-2">
-        <TypeBadge type={video.type} />
-        <span className="text-xs text-muted-foreground capitalize">
-          {video.status}
-        </span>
-      </div>
-      <h1 className="text-xl font-semibold tracking-tight">{video.title}</h1>
-      {video.notes && (
-        <p className="text-sm leading-relaxed text-muted-foreground">
-          {video.notes}
-        </p>
-      )}
-      <p className="mt-4 text-xs text-muted-foreground">
-        The scripting studio ships in Phase 2.
-      </p>
-    </div>
+    <VideoWorkspace
+      video={video}
+      seriesOptions={seriesOptions}
+      structures={allStructures}
+      outliers={outlierHooks}
+      revisions={revisions}
+      flagged={flaggedIds.has(id)}
+      lineage={{ parent, variants }}
+    />
   );
 }

@@ -5,12 +5,14 @@ import { usePathname } from "next/navigation";
 import {
   CalendarDays,
   ChartColumn,
+  Clapperboard,
   Columns3,
   Library,
   ListVideo,
   Settings,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Kbd } from "@/components/ui/kbd";
 import { ThemeToggle } from "./theme-toggle";
 
 const NAV = [
@@ -23,38 +25,59 @@ const NAV = [
 ] as const;
 
 function isActive(pathname: string, href: string) {
-  return href === "/" ? pathname === "/" : pathname.startsWith(href);
+  if (href === "/") return pathname === "/" || pathname.startsWith("/video");
+  return pathname.startsWith(href);
 }
 
 export function Sidebar() {
   const pathname = usePathname();
   return (
-    <aside className="sticky top-0 hidden h-svh w-52 shrink-0 flex-col border-r bg-sidebar md:flex">
-      <div className="px-6 pt-6 pb-4">
-        <Link href="/" className="text-sm font-semibold tracking-tight">
+    <aside className="sticky top-0 hidden h-svh w-56 shrink-0 flex-col border-r border-sidebar-border bg-sidebar md:flex">
+      <div className="flex items-center gap-2.5 px-5 pt-6 pb-6">
+        <span className="flex size-7 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-sm">
+          <Clapperboard className="size-3.5" aria-hidden />
+        </span>
+        <Link
+          href="/"
+          className="text-sm font-semibold tracking-tight text-sidebar-foreground"
+        >
           Content OS
         </Link>
       </div>
-      <nav className="flex flex-1 flex-col gap-1 px-4" aria-label="Main">
-        {NAV.map(({ href, label, icon: Icon }) => (
-          <Link
-            key={href}
-            href={href}
-            aria-current={isActive(pathname, href) ? "page" : undefined}
-            className={cn(
-              "flex items-center gap-2 rounded-md px-2 py-2 text-sm text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground",
-              isActive(pathname, href) &&
-                "bg-sidebar-accent font-medium text-sidebar-foreground",
-            )}
-          >
-            <Icon className="size-4" aria-hidden />
-            {label}
-          </Link>
-        ))}
+      <nav className="flex flex-1 flex-col gap-0.5 px-3" aria-label="Main">
+        {NAV.map(({ href, label, icon: Icon }) => {
+          const active = isActive(pathname, href);
+          return (
+            <Link
+              key={href}
+              href={href}
+              aria-current={active ? "page" : undefined}
+              className={cn(
+                "group flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm text-sidebar-foreground/65 transition-colors hover:bg-sidebar-accent/60 hover:text-sidebar-foreground",
+                active &&
+                  "bg-sidebar-accent font-medium text-sidebar-foreground shadow-none",
+              )}
+            >
+              <Icon
+                className={cn(
+                  "size-4 text-sidebar-foreground/40 transition-colors group-hover:text-sidebar-foreground/70",
+                  active && "text-sidebar-foreground/80",
+                )}
+                aria-hidden
+              />
+              {label}
+            </Link>
+          );
+        })}
       </nav>
-      <div className="flex items-center justify-between px-4 py-4">
-        <span className="px-2 text-xs text-muted-foreground">v1</span>
-        <ThemeToggle />
+      <div className="flex flex-col gap-3 px-5 pb-5">
+        <p className="text-xs text-sidebar-foreground/45">
+          <Kbd>⌘K</Kbd> capture · <Kbd>?</Kbd> shortcuts
+        </p>
+        <div className="flex items-center justify-between">
+          <span className="text-xs text-sidebar-foreground/45">v1</span>
+          <ThemeToggle />
+        </div>
       </div>
     </aside>
   );
@@ -63,22 +86,25 @@ export function Sidebar() {
 export function MobileNav() {
   const pathname = usePathname();
   return (
-    <header className="sticky top-0 z-40 flex items-center gap-1 overflow-x-auto border-b bg-background/95 px-2 py-2 backdrop-blur md:hidden">
+    <header className="sticky top-0 z-40 flex items-center gap-1 overflow-x-auto border-b bg-background/90 px-2 py-2 backdrop-blur md:hidden">
       <nav className="flex flex-1 items-center gap-1" aria-label="Main">
-        {NAV.map(({ href, label, icon: Icon }) => (
-          <Link
-            key={href}
-            href={href}
-            aria-current={isActive(pathname, href) ? "page" : undefined}
-            className={cn(
-              "flex shrink-0 items-center gap-2 rounded-md px-2 py-2 text-sm text-muted-foreground transition-colors hover:text-foreground",
-              isActive(pathname, href) && "bg-accent font-medium text-foreground",
-            )}
-          >
-            <Icon className="size-4" aria-hidden />
-            <span className="sr-only sm:not-sr-only">{label}</span>
-          </Link>
-        ))}
+        {NAV.map(({ href, label, icon: Icon }) => {
+          const active = isActive(pathname, href);
+          return (
+            <Link
+              key={href}
+              href={href}
+              aria-current={active ? "page" : undefined}
+              className={cn(
+                "flex shrink-0 items-center gap-2 rounded-lg px-2.5 py-2 text-sm text-muted-foreground transition-colors hover:text-foreground",
+                active && "bg-accent font-medium text-foreground",
+              )}
+            >
+              <Icon className="size-4" aria-hidden />
+              <span className="sr-only sm:not-sr-only">{label}</span>
+            </Link>
+          );
+        })}
       </nav>
       <ThemeToggle />
     </header>

@@ -32,4 +32,6 @@ export type OutlierStatus = (typeof OUTLIER_STATUSES)[number];
 export const videoTypeSchema = z.enum(VIDEO_TYPES);
 export const videoStatusSchema = z.enum(VIDEO_STATUSES);
 
-export type ActionResult = { ok: true } | { ok: false; error: string };
+export type ActionResult<T = void> =
+  | { ok: true; data?: T }
+  | { ok: false; error: string };
