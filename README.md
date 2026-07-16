@@ -1,36 +1,30 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Content OS
 
-## Getting Started
+A local-first content operating system for a solo short-form creator. Single user, runs on localhost, owns all of its data on disk. See `prd.md` for the full spec and `DECISIONS.md` for judgment calls made during the build.
 
-First, run the development server:
+## Run
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
+pnpm install
 pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open http://localhost:3000. No environment variables, no network calls at runtime.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Where data lives
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Everything is in `./data/content.db` (SQLite, WAL mode). The `data/` directory is gitignored and created automatically on first run; seed data loads only when the videos table is empty.
 
-## Learn More
+**Back up** by copying the `data/` directory (or, once Phase 7 lands, using Settings → Export).
 
-To learn more about Next.js, take a look at the following resources:
+## Development
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- `pnpm lint` / `pnpm typecheck` — checks
+- `pnpm db:generate` — generate a migration after editing `lib/db/schema.ts` (migrations apply automatically at startup)
+- `pnpm db:studio` — browse the DB with Drizzle Studio
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+> **Note:** the project currently uses pnpm 9. pnpm 10+ blocks dependency lifecycle scripts by default, which breaks better-sqlite3's native install — if you upgrade, run `pnpm approve-builds` for `better-sqlite3`.
 
-## Deploy on Vercel
+## Stack
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Next.js 16 (App Router, Server Actions) · React 19 · TypeScript strict · Tailwind CSS v4 · shadcn/ui · SQLite via better-sqlite3 + Drizzle ORM · dnd-kit · date-fns · zod
