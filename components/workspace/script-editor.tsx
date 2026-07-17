@@ -599,13 +599,22 @@ export function ScriptEditor({
                         </div>
                       );
                     }
+                    if (isSceneHeader) {
+                      // Only the /tag token carries the hue; a note after
+                      // the first space reads as plain text.
+                      const space = line.search(/[ \t]/);
+                      const tagPart = space < 0 ? line : line.slice(0, space);
+                      const rest = space < 0 ? "" : line.slice(space);
+                      return (
+                        <div key={dStart} data-line-r={d2r(dStart)}>
+                          <span className={cn(hue?.text)}>{tagPart}</span>
+                          {rest ? renderInline(rest) : null}
+                        </div>
+                      );
+                    }
                     return (
-                      <div
-                        key={dStart}
-                        data-line-r={d2r(dStart)}
-                        className={cn(isSceneHeader && hue?.text)}
-                      >
-                        {isSceneHeader ? line : renderInline(line)}
+                      <div key={dStart} data-line-r={d2r(dStart)}>
+                        {renderInline(line)}
                       </div>
                     );
                   })}
