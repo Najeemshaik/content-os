@@ -28,11 +28,21 @@ const HUE = {
     "bg-scene-5",
     "bg-scene-6",
   ],
+  // Gutter line marking the scene's extent, painted (inset shadow) in the
+  // margin so it can never change the text layout.
+  rule: [
+    "shadow-[inset_2px_0_0_var(--scene-1)]",
+    "shadow-[inset_2px_0_0_var(--scene-2)]",
+    "shadow-[inset_2px_0_0_var(--scene-3)]",
+    "shadow-[inset_2px_0_0_var(--scene-4)]",
+    "shadow-[inset_2px_0_0_var(--scene-5)]",
+    "shadow-[inset_2px_0_0_var(--scene-6)]",
+  ],
 } as const;
 
 export function hueClasses(tag: string) {
   const i = sceneHue(tag) - 1;
-  return { text: HUE.text[i], dot: HUE.dot[i] };
+  return { text: HUE.text[i], dot: HUE.dot[i], rule: HUE.rule[i] };
 }
 
 export type ScriptEditorHandle = {
@@ -210,13 +220,18 @@ export function ScriptEditor({
             // empty line box, keeping backdrop and textarea line counts equal.
             const bodyText = body.endsWith("\n") ? `${body}\u200b` : body;
             return (
-              <div key={scene.startChar} data-scene={index} className="scroll-mt-24">
+              <div
+                key={scene.startChar}
+                data-scene={index}
+                // Margin/padding cancel out, so the gutter line sits beside
+                // the text without moving it.
+                className={cn(
+                  "scroll-mt-24",
+                  hue && ["-ml-4 pl-4", hue.rule],
+                )}
+              >
                 {headerLine !== null && (
-                  // The only paint: `/tag` lines in their hue, `/` end
-                  // markers dimmed. Body text stays plain.
-                  <div className={hue ? hue.text : "text-muted-foreground/50"}>
-                    {headerLine}
-                  </div>
+                  <div className={cn(hue?.text)}>{headerLine}</div>
                 )}
                 {bodyText.length > 0 && <div>{bodyText}</div>}
               </div>

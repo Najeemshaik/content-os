@@ -1,14 +1,9 @@
 import { wordCount } from "./script";
 
-/** A `/tag` line opens a scene that runs until the next `/tag` line, a
- *  terminator, or the end of the script. `/broll beach sunset` = tag
- *  "broll", note "beach sunset". */
+/** A `/tag` line opens a scene that runs until a blank line (double Enter),
+ *  the next `/tag` line, or the end of the script. `/broll beach sunset` =
+ *  tag "broll", note "beach sunset". */
 export const SCENE_HEADER = /^\/([a-zA-Z][\w-]*)(?:[ \t]+(.*))?[ \t]*$/;
-
-/** A bare `/` (or `/end`) closes the current scene — the text after it is
- *  plain, unlabelled script again. Checked before SCENE_HEADER, which would
- *  otherwise read `/end` as a tag. */
-export const SCENE_END = /^\/(?:end)?[ \t]*$/i;
 
 /** Starter shot vocabulary — merged with tags already used in the script. */
 export const STARTER_TAGS = [
@@ -80,17 +75,18 @@ export function parseScenes(script: string): Scene[] {
   };
 
   for (const line of lines) {
-    const isEnd = SCENE_END.test(line);
-    const match = isEnd ? null : SCENE_HEADER.exec(line);
-    if (isEnd || match) {
-      if (offset > 0) push(offset - 1); // exclude the \n before the marker
+    const match = SCENE_HEADER.exec(line);
+    // A blank line ends a tagged scene — text after it is untagged again.
+    const escapes = !match && current.tag !== null && line.trim() === "";
+    if (match || escapes) {
+      if (offset > 0) push(offset - 1); // exclude the \n before this line
       current = {
         tag: match ? match[1].toLowerCase() : null,
         note: match ? match[2]?.trim() || null : null,
         start: offset,
-        hasHeader: true,
+        hasHeader: Boolean(match),
       };
-      bodyStart = offset + line.length + 1;
+      bodyStart = match ? offset + line.length + 1 : offset;
     }
     offset += line.length + 1;
   }
