@@ -75,9 +75,22 @@ export function ScriptEditor({
   handleRef?: React.Ref<ScriptEditorHandle>;
   placeholder?: string;
 }) {
-  const sections = React.useMemo(() => parseSections(value), [value]);
   const [collapsed, setCollapsed] = React.useState<Set<number>>(new Set());
   const [caretGlobal, setCaretGlobal] = React.useState(-1);
+
+  const caretGlobalLine = React.useMemo(() => {
+    if (caretGlobal < 0 || caretGlobal > value.length) return -1;
+    let line = 0;
+    for (let i = 0; i < caretGlobal; i++) {
+      if (value.charCodeAt(i) === 10) line++;
+    }
+    return line;
+  }, [value, caretGlobal]);
+
+  const sections = React.useMemo(
+    () => parseSections(value, caretGlobalLine),
+    [value, caretGlobalLine],
+  );
   const textareaRefs = React.useRef(new Map<number, HTMLTextAreaElement>());
   const headerRefs = React.useRef(new Map<number, HTMLInputElement>());
   const pendingCaretRef = React.useRef<number | null>(null);
@@ -399,12 +412,10 @@ function SectionBody({
       : [];
 
   return (
-    <div>
+    <div className="relative">
+      {/* Floats — appearing must never shift the text under the caret. */}
       {slashPrefix !== null && suggestions.length > 0 && (
-        <div className="flex flex-wrap items-center gap-1.5 border-b bg-muted/40 px-4 py-1.5 md:px-5">
-          <span className="text-2xs font-medium tracking-widest text-muted-foreground uppercase">
-            Scene
-          </span>
+        <div className="absolute -top-2 right-3 z-10 flex max-w-[80%] flex-wrap items-center justify-end gap-1.5 rounded-full border bg-popover px-2 py-1 shadow-card-hover">
           {suggestions.slice(0, 6).map((tag) => {
             const hue = hueClasses(tag);
             return (

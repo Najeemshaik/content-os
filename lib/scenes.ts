@@ -20,13 +20,16 @@ export type Section = {
   end: number;
 };
 
-export function parseSections(script: string): Section[] {
+export function parseSections(script: string, caretLine = -1): Section[] {
   const sections: Section[] = [];
   const lines = script.split("\n");
   let offset = 0;
   let open: Section = { name: null, headerStart: 0, bodyStart: 0, end: 0 };
-  for (const line of lines) {
-    const match = SECTION_HEADER.exec(line);
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    // The line being typed stays plain text — it only becomes a section
+    // once the caret leaves it, so the editor never restructures mid-word.
+    const match = i === caretLine ? null : SECTION_HEADER.exec(line);
     if (match) {
       open.end = Math.max(open.bodyStart, offset - 1);
       // Drop the implicit block only when the script *starts* with a header;
