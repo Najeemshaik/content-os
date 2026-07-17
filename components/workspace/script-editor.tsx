@@ -216,9 +216,13 @@ export function ScriptEditor({
             const body = scene.hasHeader
               ? lines.slice(1).join("\n")
               : scene.text;
-            // A trailing newline needs a zero-width character to render its
-            // empty line box, keeping backdrop and textarea line counts equal.
-            const bodyText = body.endsWith("\n") ? `${body}\u200b` : body;
+            // A scene ending in a newline has a final empty line (often the
+            // caret, mid-writing). Splitting consumed that line, so restore
+            // its line box with a zero-width space — even when the body is
+            // otherwise empty (a bare /tag followed by Enter).
+            const bodyText = scene.text.endsWith("\n")
+              ? `${body}\u200b`
+              : body;
             return (
               <div
                 key={scene.startChar}
