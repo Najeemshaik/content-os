@@ -6,8 +6,9 @@ import { wordCount } from "./script";
 export const SCENE_HEADER = /^\/([a-zA-Z][\w-]*)(?:[ \t]+(.*))?[ \t]*$/;
 
 /** A `>Name` line opens a collapsible section that runs until the next
- *  `>` line or the end of the script. */
-export const SECTION_HEADER = /^>[ \t]*(.*)$/;
+ *  `>` line or the end of the script. `>>` escapes: the line is plain text
+ *  showing a single literal `>`. */
+export const SECTION_HEADER = /^>(?!>)[ \t]*(.*)$/;
 
 export type Section = {
   /** null = the implicit block before the first `>` line. */
@@ -122,7 +123,7 @@ export function parseScenes(script: string, caretLine = -1): Scene[] {
     const escapes =
       !match &&
       current.tag !== null &&
-      (line.startsWith(">") ||
+      (SECTION_HEADER.test(line) ||
         (line.trim() === "" && i !== caretLine && i < lines.length - 1));
     if (match || escapes) {
       if (offset > 0) push(offset - 1); // exclude the \n before this line

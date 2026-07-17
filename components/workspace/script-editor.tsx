@@ -51,6 +51,50 @@ export type ScriptEditorHandle = {
   jumpToScene: (startChar: number) => void;
 };
 
+/* Inline styling: **bold**, *italic*, __underline__, ~~strike~~. Every
+   trick is metric-safe — bold is a text-shadow double-strike and italic a
+   synthesized oblique — so the backdrop's glyph widths and wrap points
+   stay identical to the textarea's. (Font size is impossible here: it
+   would change line metrics and break the seamless overlay.) */
+const INLINE_PATTERNS: { re: RegExp; cls: string }[] = [
+  { re: /\*\*([^*]+)\*\*/, cls: "[text-shadow:0.045em_0_0_currentColor]" },
+  { re: /__([^_]+)__/, cls: "underline underline-offset-3" },
+  { re: /~~([^~]+)~~/, cls: "line-through" },
+  { re: /\*([^*]+)\*/, cls: "italic" },
+];
+
+function renderInline(text: string, depth = 0): React.ReactNode {
+  if (text === "") return "\u200b";
+  if (depth > 4) return text;
+  let earliest: {
+    match: RegExpExecArray;
+    cls: string;
+    markerLen: number;
+  } | null = null;
+  for (const p of INLINE_PATTERNS) {
+    const m = p.re.exec(text);
+    if (m && (earliest === null || m.index < earliest.match.index)) {
+      earliest = {
+        match: m,
+        cls: p.cls,
+        markerLen: (m[0].length - m[1].length) / 2,
+      };
+    }
+  }
+  if (!earliest) return text;
+  const { match, cls, markerLen } = earliest;
+  const marker = match[0].slice(0, markerLen);
+  return (
+    <>
+      {text.slice(0, match.index)}
+      <span className="opacity-30">{marker}</span>
+      <span className={cls}>{renderInline(match[1], depth + 1)}</span>
+      <span className="opacity-30">{marker}</span>
+      {renderInline(text.slice(match.index + match[0].length), depth + 1)}
+    </>
+  );
+}
+
 /* Typography shared by the textarea and its backdrop — they must wrap
    identically, character for character. */
 const TEXT_METRICS =
@@ -79,7 +123,9 @@ export function ScriptEditor({
   const [foldedIdx, setFoldedIdx] = React.useState<Set<number>>(new Set());
   const [caretDisplayed, setCaretDisplayed] = React.useState(-1);
   const [slashPrefix, setSlashPrefix] = React.useState<string | null>(null);
-  const pendingCaretRef = React.useRef<number | null>(null);
+  const pendingCaretRef = React.useRef<{ start: number; end: number } | null>(
+    null,
+  );
 
   const sections = React.useMemo(() => parseSections(value), [value]);
 
@@ -193,7 +239,7 @@ export function ScriptEditor({
     const rStart = d2r(p);
     const rEnd = d2r(old.length - s);
     lastDisplayedRef.current = next;
-    pendingCaretRef.current = caret;
+    pendingCaretRef.current = { start: caret, end: caret };
     onChange(value.slice(0, rStart) + inserted + value.slice(rEnd));
   }
 
@@ -206,10 +252,10 @@ export function ScriptEditor({
     const textarea = textareaRef.current;
     if (!textarea) return;
     if (
-      textarea.selectionStart !== caret ||
-      textarea.selectionEnd !== caret
+      textarea.selectionStart !== caret.start ||
+      textarea.selectionEnd !== caret.end
     ) {
-      textarea.setSelectionRange(caret, caret);
+      textarea.setSelectionRange(caret.start, caret.end);
     }
   }, [displayed]);
 
@@ -340,6 +386,43 @@ export function ScriptEditor({
     const next = `${text.slice(0, lineStart)}/${tag}${text.slice(caret)}`;
     setSlashPrefix(null);
     handleDisplayedChange(next, lineStart + tag.length + 1);
+  }
+
+  /** ⌘B / ⌘I / ⌘U — wrap (or unwrap) the selection in a style marker. */
+  function toggleWrap(marker: string) {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+    const text = textarea.value;
+    const s = textarea.selectionStart;
+    const e = textarea.selectionEnd;
+    const sel = text.slice(s, e);
+    let next: string;
+    let ns: number;
+    let ne: number;
+    if (
+      sel.startsWith(marker) &&
+      sel.endsWith(marker) &&
+      sel.length >= marker.length * 2
+    ) {
+      const inner = sel.slice(marker.length, sel.length - marker.length);
+      next = text.slice(0, s) + inner + text.slice(e);
+      ns = s;
+      ne = s + inner.length;
+    } else if (
+      text.slice(Math.max(0, s - marker.length), s) === marker &&
+      text.slice(e, e + marker.length) === marker
+    ) {
+      next =
+        text.slice(0, s - marker.length) + sel + text.slice(e + marker.length);
+      ns = s - marker.length;
+      ne = ns + sel.length;
+    } else {
+      next = text.slice(0, s) + marker + sel + marker + text.slice(e);
+      ns = s + marker.length;
+      ne = ns + sel.length;
+    }
+    handleDisplayedChange(next, ne);
+    pendingCaretRef.current = { start: ns, end: ne };
   }
 
   const suggestions =
@@ -492,9 +575,9 @@ export function ScriptEditor({
                               aria-hidden
                             />
                           </button>
-                          <span className="text-muted-foreground/50">
-                            {line.slice(0, 1)}
-                          </span>
+                          {/* The typed `>` stays in the text (caret space)
+                              but the chevron is its visual. */}
+                          <span className="opacity-0">{line.slice(0, 1)}</span>
                           <span className="text-foreground">
                             {line.slice(1) || "\u200b"}
                           </span>
@@ -507,13 +590,22 @@ export function ScriptEditor({
                       );
                     }
                     const isSceneHeader = scene.hasHeader && i === 0;
+                    if (line.startsWith(">>")) {
+                      // Escaped literal: `>>` renders as a single `>`.
+                      return (
+                        <div key={dStart} data-line-r={d2r(dStart)}>
+                          <span className="opacity-0">{line.slice(0, 1)}</span>
+                          {renderInline(line.slice(1))}
+                        </div>
+                      );
+                    }
                     return (
                       <div
                         key={dStart}
                         data-line-r={d2r(dStart)}
                         className={cn(isSceneHeader && hue?.text)}
                       >
-                        {line || "\u200b"}
+                        {isSceneHeader ? line : renderInline(line)}
                       </div>
                     );
                   })}
@@ -546,6 +638,15 @@ export function ScriptEditor({
               return;
             }
             if (guardKey(e)) return;
+            if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey) {
+              const marker =
+                e.key === "b" ? "**" : e.key === "i" ? "*" : e.key === "u" ? "__" : null;
+              if (marker) {
+                e.preventDefault();
+                toggleWrap(marker);
+                return;
+              }
+            }
             if (e.key === "Tab" && suggestions.length > 0) {
               e.preventDefault();
               insertTag(suggestions[0]);
