@@ -758,7 +758,7 @@ export function VideoWorkspace({
 
           <ShotPlan
             scenes={scenes}
-            onJump={(index) => editorRef.current?.jumpToScene(index)}
+            onJump={(startChar) => editorRef.current?.jumpToScene(startChar)}
           />
 
           <section className="rounded-2xl bg-card p-4 shadow-card">

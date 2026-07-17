@@ -4,6 +4,7 @@ import * as React from "react";
 import { cn } from "@/lib/utils";
 import { Textarea } from "@/components/ui/textarea";
 import {
+  parseScenes,
   sceneHue,
   sceneRuntimeLabel,
   STARTER_TAGS,
@@ -46,7 +47,7 @@ export function hueClasses(tag: string) {
 }
 
 export type ScriptEditorHandle = {
-  jumpToScene: (index: number) => void;
+  jumpToScene: (startChar: number) => void;
 };
 
 /* Typography shared by the textarea and its backdrop — they must wrap
@@ -75,12 +76,38 @@ export function ScriptEditor({
 }) {
   const backdropRef = React.useRef<HTMLDivElement>(null);
   const [slashPrefix, setSlashPrefix] = React.useState<string | null>(null);
+  const [caretLine, setCaretLine] = React.useState(-1);
+
+  // The backdrop parses with the caret's line so the empty line a single
+  // Enter creates stays inside its scene while writing; the caret-less
+  // `scenes` prop keeps chips/shot-plan semantics pure.
+  const renderScenes = React.useMemo(
+    () => parseScenes(value, caretLine),
+    [value, caretLine],
+  );
+
+  function syncCaret() {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+    let line = 0;
+    const text = textarea.value;
+    for (let i = 0; i < textarea.selectionStart; i++) {
+      if (text.charCodeAt(i) === 10) line++;
+    }
+    setCaretLine(line);
+  }
 
   React.useImperativeHandle(handleRef, () => ({
-    jumpToScene: (index: number) => {
+    jumpToScene: (startChar: number) => {
+      let index = renderScenes.findIndex((s) => s.startChar === startChar);
+      if (index < 0) {
+        // Segmentation can differ transiently — land on the enclosing scene.
+        index = renderScenes.findLastIndex((s) => s.startChar <= startChar);
+      }
+      if (index < 0) return;
       const el = backdropRef.current?.querySelector(`[data-scene="${index}"]`);
       el?.scrollIntoView({ behavior: "smooth", block: "start" });
-      const scene = scenes[index];
+      const scene = renderScenes[index];
       const textarea = textareaRef.current;
       if (scene && textarea) {
         const caret = scene.startChar + scene.text.length;
@@ -123,23 +150,23 @@ export function ScriptEditor({
   }
 
   const knownTags = React.useMemo(() => {
-    const used = scenes.flatMap((s) => (s.tag ? [s.tag] : []));
+    const used = renderScenes.flatMap((s) => (s.tag ? [s.tag] : []));
     return [...new Set([...used, ...STARTER_TAGS])];
-  }, [scenes]);
+  }, [renderScenes]);
 
   const suggestions =
     slashPrefix !== null
       ? knownTags.filter((t) => t.startsWith(slashPrefix) && t !== slashPrefix)
       : [];
 
-  const tagged = scenes.filter((s) => s.tag);
+  const tagged = renderScenes.filter((s) => s.tag);
 
   return (
     <div>
       {/* Scene map — one chip per tagged scene, click to jump. */}
       {tagged.length > 0 && (
         <div className="flex flex-wrap items-center gap-1.5 border-b px-4 py-2 md:px-5">
-          {scenes.map((scene, index) => {
+          {renderScenes.map((scene, index) => {
             if (!scene.tag) return null;
             const hue = hueClasses(scene.tag);
             return (
@@ -209,7 +236,7 @@ export function ScriptEditor({
           )}
           style={{ maxWidth: "72ch" }}
         >
-          {scenes.map((scene, index) => {
+          {renderScenes.map((scene, index) => {
             const hue = scene.tag ? hueClasses(scene.tag) : null;
             const lines = scene.text.split("\n");
             const headerLine = scene.hasHeader ? lines[0] : null;
@@ -248,10 +275,12 @@ export function ScriptEditor({
           onChange={(e) => {
             onChange(e.target.value);
             onSelectionSync();
+            syncCaret();
             requestAnimationFrame(detectSlash);
           }}
           onSelect={() => {
             onSelectionSync();
+            syncCaret();
             detectSlash();
           }}
           onBlur={() => setSlashPrefix(null)}

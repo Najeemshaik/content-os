@@ -12,7 +12,7 @@ export function ShotPlan({
   onJump,
 }: {
   scenes: Scene[];
-  onJump: (sceneIndex: number) => void;
+  onJump: (startChar: number) => void;
 }) {
   const groups = React.useMemo(() => groupScenes(scenes), [scenes]);
   const [openTag, setOpenTag] = React.useState<string | null>(null);
@@ -60,7 +60,6 @@ export function ShotPlan({
               {open && (
                 <div className="flex flex-col gap-0.5 pb-1.5 pl-5">
                   {group.scenes.map((scene) => {
-                    const index = scenes.indexOf(scene);
                     const firstLine =
                       scene.note ??
                       scene.text.split("\n")[1]?.trim() ??
@@ -69,7 +68,7 @@ export function ShotPlan({
                       <button
                         key={scene.startChar}
                         type="button"
-                        onClick={() => onJump(index)}
+                        onClick={() => onJump(scene.startChar)}
                         className="flex items-baseline gap-2 rounded-md px-1 py-1 text-left text-xs text-muted-foreground transition-colors hover:bg-accent/60 hover:text-foreground"
                       >
                         <span className="min-w-0 flex-1 truncate">

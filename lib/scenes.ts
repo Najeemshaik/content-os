@@ -42,7 +42,7 @@ function sceneSeconds(words: number): number {
   return Math.round(words / 2.5); // PRD §4.2 pacing
 }
 
-export function parseScenes(script: string): Scene[] {
+export function parseScenes(script: string, caretLine = -1): Scene[] {
   const lines = script.split("\n");
   const scenes: Scene[] = [];
   let current: {
@@ -78,12 +78,14 @@ export function parseScenes(script: string): Scene[] {
     const line = lines[i];
     const match = SCENE_HEADER.exec(line);
     // A blank line ends a tagged scene — text after it is untagged again.
-    // A trailing blank at the end of the script doesn't count: that's just
-    // the caret sitting on a fresh line mid-writing (single Enter).
+    // Two exceptions keep the scene with the writer mid-keystroke: the line
+    // the caret is on (a single Enter just happened there) and a trailing
+    // blank at the end of the script.
     const escapes =
       !match &&
       current.tag !== null &&
       line.trim() === "" &&
+      i !== caretLine &&
       i < lines.length - 1;
     if (match || escapes) {
       if (offset > 0) push(offset - 1); // exclude the \n before this line
