@@ -172,7 +172,6 @@ export function VideoWorkspace({
   const [archiveOpen, setArchiveOpen] = React.useState(false);
   const [deleteOpen, setDeleteOpen] = React.useState(false);
   const [advancing, startAdvance] = React.useTransition();
-  const scriptRef = React.useRef<HTMLTextAreaElement>(null);
   const editorRef = React.useRef<ScriptEditorHandle>(null);
   const [selection, setSelection] = React.useState<{
     start: number;
@@ -306,12 +305,6 @@ export function VideoWorkspace({
     state.format === "long" && selection && selection.end > selection.start
       ? state.scriptBody.slice(selection.start, selection.end).trim()
       : "";
-
-  function syncSelection() {
-    const el = scriptRef.current;
-    if (!el) return;
-    setSelection({ start: el.selectionStart, end: el.selectionEnd });
-  }
 
   function clip() {
     if (!selectedExcerpt || deriving) return;
@@ -560,18 +553,16 @@ export function VideoWorkspace({
             </div>
             <ScriptEditor
               value={state.scriptBody}
-              scenes={scenes}
               onChange={(v) =>
                 patch({ scriptBody: v }, { snapshotRelevant: true })
               }
-              onSelectionSync={syncSelection}
+              onSelectionChange={(start, end) => setSelection({ start, end })}
               onCmdShiftS={() => {
                 if (state.format === "long") clip();
               }}
-              textareaRef={scriptRef}
               handleRef={editorRef}
               placeholder={
-                "Write the script. Verbal hook first — say it like you'd say it on camera.\nType /interview, /broll, /talking-head… to mark scenes for the shot plan. A blank line ends a scene."
+                "Write the script. Verbal hook first — say it like you'd say it on camera.\nType /interview, /broll, /talking-head… to mark scenes for the shot plan; a blank line ends one. >Name starts a collapsible section."
               }
             />
           </section>

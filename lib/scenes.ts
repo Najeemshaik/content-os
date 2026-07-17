@@ -1,9 +1,46 @@
 import { wordCount } from "./script";
 
 /** A `/tag` line opens a scene that runs until a blank line (double Enter),
- *  the next `/tag` line, or the end of the script. `/broll beach sunset` =
- *  tag "broll", note "beach sunset". */
+ *  the next `/tag` line, a `>Section` line, or the end of the script.
+ *  `/broll beach sunset` = tag "broll", note "beach sunset". */
 export const SCENE_HEADER = /^\/([a-zA-Z][\w-]*)(?:[ \t]+(.*))?[ \t]*$/;
+
+/** A `>Name` line opens a collapsible section that runs until the next
+ *  `>` line or the end of the script. */
+export const SECTION_HEADER = /^>[ \t]*(.*)$/;
+
+export type Section = {
+  /** null = the implicit block before the first `>` line. */
+  name: string | null;
+  /** Offset of the `>` line (== bodyStart for the implicit block). */
+  headerStart: number;
+  /** Offset just past the header line's newline; body runs to `end`. */
+  bodyStart: number;
+  /** Exclusive end of the body (before the \n preceding the next header). */
+  end: number;
+};
+
+export function parseSections(script: string): Section[] {
+  const sections: Section[] = [];
+  const lines = script.split("\n");
+  let offset = 0;
+  let open: Section = { name: null, headerStart: 0, bodyStart: 0, end: 0 };
+  for (const line of lines) {
+    const match = SECTION_HEADER.exec(line);
+    if (match) {
+      open.end = Math.max(open.bodyStart, offset - 1);
+      // Drop the implicit block only when the script *starts* with a header;
+      // otherwise it stays (even empty) so there's room to type above.
+      if (open.name !== null || offset > 0) sections.push(open);
+      const bodyStart = Math.min(offset + line.length + 1, script.length);
+      open = { name: match[1].trim(), headerStart: offset, bodyStart, end: 0 };
+    }
+    offset += line.length + 1;
+  }
+  open.end = script.length;
+  sections.push(open);
+  return sections;
+}
 
 /** Starter shot vocabulary — merged with tags already used in the script. */
 export const STARTER_TAGS = [
@@ -59,34 +96,31 @@ export function parseScenes(script: string, caretLine = -1): Scene[] {
     // Words exclude the marker line itself — it's direction, not narration.
     const body = script.slice(Math.min(bodyStart, end), end);
     const words = wordCount(current.hasHeader ? body : text);
-    // Keep even whitespace-only untagged scenes: the editor backdrop must
-    // reproduce every character so its line boxes match the textarea's.
-    if (current.tag !== null || text.length > 0) {
-      scenes.push({
-        tag: current.tag,
-        note: current.note,
-        hasHeader: current.hasHeader,
-        startChar: current.start,
-        text,
-        words,
-        seconds: sceneSeconds(words),
-      });
-    }
+    // Every scene is kept — even an empty untagged one (a lone blank line
+    // between scenes): the editor backdrop must reproduce every line box.
+    scenes.push({
+      tag: current.tag,
+      note: current.note,
+      hasHeader: current.hasHeader,
+      startChar: current.start,
+      text,
+      words,
+      seconds: sceneSeconds(words),
+    });
   };
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     const match = SCENE_HEADER.exec(line);
-    // A blank line ends a tagged scene — text after it is untagged again.
-    // Two exceptions keep the scene with the writer mid-keystroke: the line
-    // the caret is on (a single Enter just happened there) and a trailing
-    // blank at the end of the script.
+    // A blank line or a `>Section` header ends a tagged scene. Two
+    // exceptions keep the scene with the writer mid-keystroke: the line the
+    // caret is on (a single Enter just happened there) and a trailing blank
+    // at the end of the script.
     const escapes =
       !match &&
       current.tag !== null &&
-      line.trim() === "" &&
-      i !== caretLine &&
-      i < lines.length - 1;
+      (line.startsWith(">") ||
+        (line.trim() === "" && i !== caretLine && i < lines.length - 1));
     if (match || escapes) {
       if (offset > 0) push(offset - 1); // exclude the \n before this line
       current = {

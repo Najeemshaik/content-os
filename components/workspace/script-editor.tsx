@@ -1,14 +1,17 @@
 "use client";
 
 import * as React from "react";
+import { ChevronRight, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Textarea } from "@/components/ui/textarea";
 import {
   parseScenes,
+  parseSections,
   sceneHue,
   sceneRuntimeLabel,
   STARTER_TAGS,
   type Scene,
+  type Section,
 } from "@/lib/scenes";
 
 /* Scene hues resolve through static class names so Tailwind sees them. */
@@ -50,134 +53,151 @@ export type ScriptEditorHandle = {
   jumpToScene: (startChar: number) => void;
 };
 
-/* Typography shared by the textarea and its backdrop — they must wrap
+/* Typography shared by the textareas and their backdrops — they must wrap
    identically, character for character. */
 const TEXT_METRICS =
-  "px-5 py-5 !text-base leading-7 whitespace-pre-wrap break-words md:px-8";
+  "px-5 py-4 !text-base leading-7 whitespace-pre-wrap break-words md:px-8";
+
+type SectionScenes = { section: Section; index: number; scenes: Scene[] };
 
 export function ScriptEditor({
   value,
-  scenes,
   onChange,
-  onSelectionSync,
+  onSelectionChange,
   onCmdShiftS,
-  textareaRef,
   handleRef,
   placeholder,
 }: {
   value: string;
-  scenes: Scene[];
   onChange: (value: string) => void;
-  onSelectionSync: () => void;
+  onSelectionChange: (start: number, end: number) => void;
   onCmdShiftS?: () => void;
-  textareaRef: React.RefObject<HTMLTextAreaElement | null>;
   handleRef?: React.Ref<ScriptEditorHandle>;
   placeholder?: string;
 }) {
-  const backdropRef = React.useRef<HTMLDivElement>(null);
-  const [slashPrefix, setSlashPrefix] = React.useState<string | null>(null);
-  const [caretLine, setCaretLine] = React.useState(-1);
+  const sections = React.useMemo(() => parseSections(value), [value]);
+  const [collapsed, setCollapsed] = React.useState<Set<number>>(new Set());
+  const [caretGlobal, setCaretGlobal] = React.useState(-1);
+  const textareaRefs = React.useRef(new Map<number, HTMLTextAreaElement>());
+  const pendingCaretRef = React.useRef<number | null>(null);
 
-  // The backdrop parses with the caret's line so the empty line a single
-  // Enter creates stays inside its scene while writing; the caret-less
-  // `scenes` prop keeps chips/shot-plan semantics pure.
-  const renderScenes = React.useMemo(
-    () => parseScenes(value, caretLine),
-    [value, caretLine],
+  // Scenes per section, caret-aware inside the section that holds the caret.
+  const sectionScenes: SectionScenes[] = React.useMemo(
+    () =>
+      sections.map((section, index) => {
+        const body = value.slice(section.bodyStart, section.end);
+        let relCaretLine = -1;
+        if (caretGlobal >= section.bodyStart && caretGlobal <= section.end) {
+          relCaretLine = 0;
+          for (let i = section.bodyStart; i < caretGlobal; i++) {
+            if (value.charCodeAt(i) === 10) relCaretLine++;
+          }
+        }
+        return { section, index, scenes: parseScenes(body, relCaretLine) };
+      }),
+    [sections, value, caretGlobal],
   );
 
-  function syncCaret() {
-    const textarea = textareaRef.current;
-    if (!textarea) return;
-    let line = 0;
-    const text = textarea.value;
-    for (let i = 0; i < textarea.selectionStart; i++) {
-      if (text.charCodeAt(i) === 10) line++;
-    }
-    setCaretLine(line);
-  }
-
-  React.useImperativeHandle(handleRef, () => ({
-    jumpToScene: (startChar: number) => {
-      let index = renderScenes.findIndex((s) => s.startChar === startChar);
-      if (index < 0) {
-        // Segmentation can differ transiently — land on the enclosing scene.
-        index = renderScenes.findLastIndex((s) => s.startChar <= startChar);
-      }
-      if (index < 0) return;
-      const el = backdropRef.current?.querySelector(`[data-scene="${index}"]`);
-      el?.scrollIntoView({ behavior: "smooth", block: "start" });
-      const scene = renderScenes[index];
-      const textarea = textareaRef.current;
-      if (scene && textarea) {
-        const caret = scene.startChar + scene.text.length;
-        textarea.focus({ preventScroll: true });
-        textarea.setSelectionRange(caret, caret);
-      }
-    },
-  }));
-
-  /** The current caret line, when it's a partial `/tag` being typed.
-   *  Reads the DOM value — the prop can lag a frame behind fast typing. */
-  function detectSlash() {
-    const textarea = textareaRef.current;
-    if (!textarea || textarea.selectionStart !== textarea.selectionEnd) {
-      setSlashPrefix(null);
-      return;
-    }
-    const text = textarea.value;
-    const caret = textarea.selectionStart;
-    const lineStart = text.lastIndexOf("\n", caret - 1) + 1;
-    const line = text.slice(lineStart, caret);
-    const match = /^\/([\w-]*)$/.exec(line);
-    setSlashPrefix(match ? match[1].toLowerCase() : null);
-  }
-
-  function insertTag(tag: string) {
-    const textarea = textareaRef.current;
-    if (!textarea) return;
-    const text = textarea.value;
-    const caret = textarea.selectionStart;
-    const lineStart = text.lastIndexOf("\n", caret - 1) + 1;
-    const next = `${text.slice(0, lineStart)}/${tag}${text.slice(caret)}`;
-    onChange(next);
-    setSlashPrefix(null);
-    requestAnimationFrame(() => {
-      const pos = lineStart + tag.length + 1;
-      textarea.focus({ preventScroll: true });
-      textarea.setSelectionRange(pos, pos);
-    });
-  }
-
   const knownTags = React.useMemo(() => {
-    const used = renderScenes.flatMap((s) => (s.tag ? [s.tag] : []));
+    const used = sectionScenes.flatMap(({ scenes }) =>
+      scenes.flatMap((s) => (s.tag ? [s.tag] : [])),
+    );
     return [...new Set([...used, ...STARTER_TAGS])];
-  }, [renderScenes]);
+  }, [sectionScenes]);
 
-  const suggestions =
-    slashPrefix !== null
-      ? knownTags.filter((t) => t.startsWith(slashPrefix) && t !== slashPrefix)
-      : [];
+  /** Splice a section's edited body back into the full script. */
+  function updateBody(section: Section, newBody: string, localCaret: number) {
+    const next =
+      value.slice(0, section.bodyStart) + newBody + value.slice(section.end);
+    pendingCaretRef.current = section.bodyStart + localCaret;
+    setCaretGlobal(section.bodyStart + localCaret);
+    onChange(next);
+  }
 
-  const tagged = renderScenes.filter((s) => s.tag);
+  function renameSection(section: Section, name: string) {
+    const next =
+      value.slice(0, section.headerStart) +
+      `>${name}` +
+      value.slice(Math.min(section.bodyStart - 1, value.length));
+    onChange(next);
+  }
+
+  function removeSection(section: Section) {
+    // Delete the header line only — the body merges into the block above.
+    const next =
+      value.slice(0, section.headerStart) +
+      value.slice(Math.min(section.bodyStart, value.length));
+    onChange(next);
+  }
+
+  // After a structural change (typing `>name` splits a block), the caret's
+  // textarea may be a different one — move focus to wherever the caret
+  // landed. Same-textarea edits are left alone.
+  React.useLayoutEffect(() => {
+    const caret = pendingCaretRef.current;
+    if (caret === null) return;
+    pendingCaretRef.current = null;
+    const index = sections.findLastIndex(
+      (s) => caret >= s.bodyStart && caret <= s.end,
+    );
+    if (index < 0) return;
+    const textarea = textareaRefs.current.get(index);
+    if (!textarea) return;
+    const local = caret - sections[index].bodyStart;
+    if (
+      document.activeElement === textarea &&
+      textarea.selectionStart === local &&
+      textarea.selectionEnd === local
+    )
+      return;
+    textarea.focus({ preventScroll: true });
+    textarea.setSelectionRange(local, local);
+  }, [sections]);
+
+  const jumpToScene = React.useCallback(
+    (startChar: number) => {
+      const holder = sectionScenes.find(
+        ({ section }) =>
+          startChar >= section.bodyStart && startChar <= section.end,
+      );
+      if (!holder) return;
+      setCollapsed((prev) => {
+        if (!prev.has(holder.index)) return prev;
+        const next = new Set(prev);
+        next.delete(holder.index);
+        return next;
+      });
+      requestAnimationFrame(() => {
+        const local = startChar - holder.section.bodyStart;
+        const el = document.querySelector(
+          `[data-section="${holder.index}"] [data-scene-start="${local}"]`,
+        );
+        el?.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+    },
+    [sectionScenes],
+  );
+
+  React.useImperativeHandle(handleRef, () => ({ jumpToScene }), [jumpToScene]);
+
+  const allTagged = sectionScenes.flatMap(({ section, scenes }) =>
+    scenes
+      .filter((s) => s.tag)
+      .map((s) => ({ ...s, globalStart: section.bodyStart + s.startChar })),
+  );
 
   return (
     <div>
       {/* Scene map — one chip per tagged scene, click to jump. */}
-      {tagged.length > 0 && (
+      {allTagged.length > 0 && (
         <div className="flex flex-wrap items-center gap-1.5 border-b px-4 py-2 md:px-5">
-          {renderScenes.map((scene, index) => {
-            if (!scene.tag) return null;
-            const hue = hueClasses(scene.tag);
+          {allTagged.map((scene) => {
+            const hue = hueClasses(scene.tag!);
             return (
               <button
-                key={`${scene.tag}-${scene.startChar}`}
+                key={scene.globalStart}
                 type="button"
-                onClick={() =>
-                  backdropRef.current
-                    ?.querySelector(`[data-scene="${index}"]`)
-                    ?.scrollIntoView({ behavior: "smooth", block: "center" })
-                }
+                onClick={() => jumpToScene(scene.globalStart)}
                 className="flex items-center gap-1.5 rounded-full bg-muted/70 py-0.5 pr-2 pl-1.5 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
               >
                 <span
@@ -194,7 +214,156 @@ export function ScriptEditor({
         </div>
       )}
 
-      {/* Slash suggestions — shown while typing a /tag line. */}
+      {sectionScenes.map(({ section, index, scenes }) => {
+        const body = value.slice(section.bodyStart, section.end);
+        const isCollapsed = collapsed.has(index) && section.name !== null;
+        const tagged = scenes.filter((s) => s.tag);
+        const seconds = tagged.reduce((sum, s) => sum + s.seconds, 0);
+        return (
+          <div key={`${index}-${section.headerStart}`} data-section={index}>
+            {section.name !== null && (
+              <div className="group/section flex items-center gap-1 border-t px-3 py-1.5 md:px-6">
+                <button
+                  type="button"
+                  aria-expanded={!isCollapsed}
+                  aria-label={`${isCollapsed ? "Expand" : "Collapse"} section`}
+                  onClick={() =>
+                    setCollapsed((prev) => {
+                      const next = new Set(prev);
+                      if (next.has(index)) next.delete(index);
+                      else next.add(index);
+                      return next;
+                    })
+                  }
+                  className="flex size-6 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
+                >
+                  <ChevronRight
+                    className={cn(
+                      "size-4 transition-transform",
+                      !isCollapsed && "rotate-90",
+                    )}
+                    aria-hidden
+                  />
+                </button>
+                <input
+                  value={section.name}
+                  onChange={(e) => renameSection(section, e.target.value)}
+                  placeholder="Section name"
+                  aria-label="Section name"
+                  className="min-w-0 flex-1 bg-transparent text-sm font-semibold tracking-tight outline-none placeholder:font-normal placeholder:text-muted-foreground"
+                />
+                {(tagged.length > 0 || isCollapsed) && (
+                  <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
+                    {tagged.length}{" "}
+                    {tagged.length === 1 ? "scene" : "scenes"}
+                    {seconds > 0 && ` · ${sceneRuntimeLabel(seconds)}`}
+                  </span>
+                )}
+                <button
+                  type="button"
+                  aria-label="Remove section header (keeps its text)"
+                  title="Remove section header (keeps its text)"
+                  onClick={() => removeSection(section)}
+                  className="flex size-6 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-opacity group-hover/section:opacity-100 hover:bg-accent hover:text-foreground focus-visible:opacity-100"
+                >
+                  <X className="size-3.5" aria-hidden />
+                </button>
+              </div>
+            )}
+            {!isCollapsed && (
+              <SectionBody
+                body={body}
+                scenes={scenes}
+                knownTags={knownTags}
+                isOnly={sections.length === 1}
+                placeholder={index === 0 ? placeholder : undefined}
+                onBody={(next, caret) => updateBody(section, next, caret)}
+                onSelection={(start, end) =>
+                  onSelectionChange(
+                    section.bodyStart + start,
+                    section.bodyStart + end,
+                  )
+                }
+                onCaret={(local) => setCaretGlobal(section.bodyStart + local)}
+                onCmdShiftS={onCmdShiftS}
+                registerRef={(el) => {
+                  if (el) textareaRefs.current.set(index, el);
+                  else textareaRefs.current.delete(index);
+                }}
+              />
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function SectionBody({
+  body,
+  scenes,
+  knownTags,
+  isOnly,
+  placeholder,
+  onBody,
+  onSelection,
+  onCaret,
+  onCmdShiftS,
+  registerRef,
+}: {
+  body: string;
+  scenes: Scene[];
+  knownTags: string[];
+  isOnly: boolean;
+  placeholder?: string;
+  onBody: (next: string, caret: number) => void;
+  onSelection: (start: number, end: number) => void;
+  onCaret: (local: number) => void;
+  onCmdShiftS?: () => void;
+  registerRef: (el: HTMLTextAreaElement | null) => void;
+}) {
+  const localRef = React.useRef<HTMLTextAreaElement | null>(null);
+  const [slashPrefix, setSlashPrefix] = React.useState<string | null>(null);
+
+  function detectSlash() {
+    const textarea = localRef.current;
+    if (!textarea || textarea.selectionStart !== textarea.selectionEnd) {
+      setSlashPrefix(null);
+      return;
+    }
+    const text = textarea.value;
+    const caret = textarea.selectionStart;
+    const lineStart = text.lastIndexOf("\n", caret - 1) + 1;
+    const line = text.slice(lineStart, caret);
+    const match = /^\/([\w-]*)$/.exec(line);
+    setSlashPrefix(match ? match[1].toLowerCase() : null);
+  }
+
+  function insertTag(tag: string) {
+    const textarea = localRef.current;
+    if (!textarea) return;
+    const text = textarea.value;
+    const caret = textarea.selectionStart;
+    const lineStart = text.lastIndexOf("\n", caret - 1) + 1;
+    const next = `${text.slice(0, lineStart)}/${tag}${text.slice(caret)}`;
+    setSlashPrefix(null);
+    onBody(next, lineStart + tag.length + 1);
+  }
+
+  function sync() {
+    const textarea = localRef.current;
+    if (!textarea) return;
+    onSelection(textarea.selectionStart, textarea.selectionEnd);
+    onCaret(textarea.selectionStart);
+  }
+
+  const suggestions =
+    slashPrefix !== null
+      ? knownTags.filter((t) => t.startsWith(slashPrefix) && t !== slashPrefix)
+      : [];
+
+  return (
+    <div>
       {slashPrefix !== null && suggestions.length > 0 && (
         <div className="flex flex-wrap items-center gap-1.5 border-b bg-muted/40 px-4 py-1.5 md:px-5">
           <span className="text-2xs font-medium tracking-widest text-muted-foreground uppercase">
@@ -228,7 +397,6 @@ export function ScriptEditor({
         {/* Backdrop paints the scene structure; the textarea's own text is
             transparent and sits pixel-for-pixel on top. */}
         <div
-          ref={backdropRef}
           aria-hidden
           className={cn(
             "pointer-events-none absolute inset-0 w-full",
@@ -236,26 +404,29 @@ export function ScriptEditor({
           )}
           style={{ maxWidth: "72ch" }}
         >
-          {renderScenes.map((scene, index) => {
+          {scenes.map((scene) => {
             const hue = scene.tag ? hueClasses(scene.tag) : null;
             const lines = scene.text.split("\n");
             const headerLine = scene.hasHeader ? lines[0] : null;
-            const body = scene.hasHeader
+            const sceneBody = scene.hasHeader
               ? lines.slice(1).join("\n")
               : scene.text;
             // A scene ending in a newline has a final empty line (often the
             // caret, mid-writing). Splitting consumed that line, so restore
-            // its line box with a zero-width space — even when the body is
-            // otherwise empty (a bare /tag followed by Enter).
-            const bodyText = scene.text.endsWith("\n")
-              ? `${body}\u200b`
-              : body;
+            // its line box with a zero-width space.
+            // Empty scenes (a lone blank line between scenes) and trailing
+            // newlines still need their line boxes — a zero-width space
+            // makes them render so the layers can't drift.
+            const bodyText =
+              scene.text === ""
+                ? "\u200b"
+                : scene.text.endsWith("\n")
+                  ? `${sceneBody}\u200b`
+                  : sceneBody;
             return (
               <div
                 key={scene.startChar}
-                data-scene={index}
-                // Margin/padding cancel out, so the gutter line sits beside
-                // the text without moving it.
+                data-scene-start={scene.startChar}
                 className={cn(
                   "scroll-mt-24",
                   hue && ["-ml-4 pl-4", hue.rule],
@@ -270,17 +441,18 @@ export function ScriptEditor({
           })}
         </div>
         <Textarea
-          ref={textareaRef}
-          value={value}
+          ref={(el) => {
+            localRef.current = el;
+            registerRef(el);
+          }}
+          value={body}
           onChange={(e) => {
-            onChange(e.target.value);
-            onSelectionSync();
-            syncCaret();
+            onBody(e.target.value, e.target.selectionStart);
+            sync();
             requestAnimationFrame(detectSlash);
           }}
           onSelect={() => {
-            onSelectionSync();
-            syncCaret();
+            sync();
             detectSlash();
           }}
           onBlur={() => setSlashPrefix(null)}
@@ -302,7 +474,8 @@ export function ScriptEditor({
           placeholder={placeholder}
           aria-label="Script"
           className={cn(
-            "relative field-sizing-content max-h-none min-h-[55svh] w-full resize-none rounded-none border-0 bg-transparent text-transparent caret-foreground shadow-none selection:bg-primary/15 selection:text-transparent focus-visible:ring-0 dark:bg-transparent",
+            "relative field-sizing-content max-h-none w-full resize-none rounded-none border-0 bg-transparent text-transparent caret-foreground shadow-none selection:bg-primary/15 selection:text-transparent focus-visible:ring-0 dark:bg-transparent",
+            isOnly ? "min-h-[50svh]" : "min-h-16",
             TEXT_METRICS,
           )}
           style={{ maxWidth: "72ch" }}

@@ -110,6 +110,7 @@ Judgment calls made while building, per the PRD's instruction to decide and log 
 - **Shot plan** (right column) groups tagged scenes by shot type with ×count/words/runtime and jump links — the filming batch view. Board cards show `N · M shot types` tallies, computed server-side so scripts never ship to the board.
 - **Slash suggestions** render as a static row above the editor (starter vocabulary + tags already used); Tab completes the first match. No caret-anchored popover math.
 - Deferred: cross-video "filming day" view grouping Production-stage scenes by tag across videos.
+- **Iterated with the owner to final grammar**: `/tag` opens a scene marked by a solid gutter line spanning exactly its lines; a blank line ends it (caret-aware — the empty line a single Enter creates stays in the scene while writing); `>Name` opens a **collapsible section** (chevron header row with rename input, scene-count/runtime meta, and a remove-header button). Sections are one editor block each (a textarea can't fold lines), spliced back into the single `scriptBody` string on every edit; a caret handoff (`pendingCaretRef` + layout effect) keeps typing seamless when a `>` line splits a block. Empty between-scene lines render a zero-width-space line box so the transparent-textarea/backdrop layers never drift.
 
 ## Empty start (owner request, 2026-07-16)
 
