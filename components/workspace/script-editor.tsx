@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { ChevronRight, X } from "lucide-react";
+import { ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -79,6 +79,7 @@ export function ScriptEditor({
   const [collapsed, setCollapsed] = React.useState<Set<number>>(new Set());
   const [caretGlobal, setCaretGlobal] = React.useState(-1);
   const textareaRefs = React.useRef(new Map<number, HTMLTextAreaElement>());
+  const headerRefs = React.useRef(new Map<number, HTMLInputElement>());
   const pendingCaretRef = React.useRef<number | null>(null);
 
   // Scenes per section, caret-aware inside the section that holds the caret.
@@ -137,6 +138,23 @@ export function ScriptEditor({
     const caret = pendingCaretRef.current;
     if (caret === null) return;
     pendingCaretRef.current = null;
+    // Caret inside a `>Name` header line → focus that inline input.
+    const headerIndex = sections.findIndex(
+      (s) =>
+        s.name !== null && caret >= s.headerStart && caret < s.bodyStart,
+    );
+    if (headerIndex >= 0) {
+      const input = headerRefs.current.get(headerIndex);
+      if (input && document.activeElement !== input) {
+        const local = Math.max(
+          0,
+          Math.min(caret - sections[headerIndex].headerStart - 1, input.value.length),
+        );
+        input.focus({ preventScroll: true });
+        input.setSelectionRange(local, local);
+      }
+      return;
+    }
     const index = sections.findLastIndex(
       (s) => caret >= s.bodyStart && caret <= s.end,
     );
@@ -222,7 +240,15 @@ export function ScriptEditor({
         return (
           <div key={`${index}-${section.headerStart}`} data-section={index}>
             {section.name !== null && (
-              <div className="group/section flex items-center gap-1 border-t px-3 py-1.5 md:px-6">
+              // Reddit-thread style: the `>Name` line sits in the text flow;
+              // the only chrome is a small chevron in the left gutter.
+              <div
+                className={cn(
+                  "relative flex items-baseline px-5 leading-7 md:px-8",
+                  isCollapsed && "text-muted-foreground",
+                )}
+                style={{ maxWidth: "72ch" }}
+              >
                 <button
                   type="button"
                   aria-expanded={!isCollapsed}
@@ -235,39 +261,49 @@ export function ScriptEditor({
                       return next;
                     })
                   }
-                  className="flex size-6 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
+                  className="absolute top-1/2 left-0.5 flex size-5 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground/60 hover:bg-accent hover:text-foreground md:left-2"
                 >
                   <ChevronRight
                     className={cn(
-                      "size-4 transition-transform",
+                      "size-3.5 transition-transform",
                       !isCollapsed && "rotate-90",
                     )}
                     aria-hidden
                   />
                 </button>
+                <span
+                  aria-hidden
+                  className="!text-base text-muted-foreground/50"
+                >
+                  &gt;
+                </span>
                 <input
+                  ref={(el) => {
+                    if (el) headerRefs.current.set(index, el);
+                    else headerRefs.current.delete(index);
+                  }}
                   value={section.name}
                   onChange={(e) => renameSection(section, e.target.value)}
-                  placeholder="Section name"
+                  onKeyDown={(e) => {
+                    if (e.key === "Backspace" && section.name === "") {
+                      e.preventDefault();
+                      removeSection(section);
+                    } else if (e.key === "Enter") {
+                      e.preventDefault();
+                      textareaRefs.current.get(index)?.focus();
+                      textareaRefs.current.get(index)?.setSelectionRange(0, 0);
+                    }
+                  }}
+                  placeholder="Section"
                   aria-label="Section name"
-                  className="min-w-0 flex-1 bg-transparent text-sm font-semibold tracking-tight outline-none placeholder:font-normal placeholder:text-muted-foreground"
+                  className="min-w-0 flex-1 bg-transparent !text-base font-medium tracking-tight outline-none placeholder:font-normal placeholder:text-muted-foreground/50"
                 />
-                {(tagged.length > 0 || isCollapsed) && (
-                  <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
-                    {tagged.length}{" "}
-                    {tagged.length === 1 ? "scene" : "scenes"}
+                {isCollapsed && (
+                  <span className="shrink-0 text-xs tabular-nums text-muted-foreground/70">
+                    {tagged.length} {tagged.length === 1 ? "scene" : "scenes"}
                     {seconds > 0 && ` · ${sceneRuntimeLabel(seconds)}`}
                   </span>
                 )}
-                <button
-                  type="button"
-                  aria-label="Remove section header (keeps its text)"
-                  title="Remove section header (keeps its text)"
-                  onClick={() => removeSection(section)}
-                  className="flex size-6 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-opacity group-hover/section:opacity-100 hover:bg-accent hover:text-foreground focus-visible:opacity-100"
-                >
-                  <X className="size-3.5" aria-hidden />
-                </button>
               </div>
             )}
             {!isCollapsed && (
