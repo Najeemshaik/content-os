@@ -74,10 +74,17 @@ export function parseScenes(script: string): Scene[] {
     }
   };
 
-  for (const line of lines) {
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
     const match = SCENE_HEADER.exec(line);
     // A blank line ends a tagged scene — text after it is untagged again.
-    const escapes = !match && current.tag !== null && line.trim() === "";
+    // A trailing blank at the end of the script doesn't count: that's just
+    // the caret sitting on a fresh line mid-writing (single Enter).
+    const escapes =
+      !match &&
+      current.tag !== null &&
+      line.trim() === "" &&
+      i < lines.length - 1;
     if (match || escapes) {
       if (offset > 0) push(offset - 1); // exclude the \n before this line
       current = {
