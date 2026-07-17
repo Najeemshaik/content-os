@@ -1,8 +1,14 @@
 import { wordCount } from "./script";
 
-/** A `/tag` line opens a scene that runs until the next `/tag` line.
- *  `/broll beach sunset` = tag "broll", note "beach sunset". */
+/** A `/tag` line opens a scene that runs until the next `/tag` line, a
+ *  terminator, or the end of the script. `/broll beach sunset` = tag
+ *  "broll", note "beach sunset". */
 export const SCENE_HEADER = /^\/([a-zA-Z][\w-]*)(?:[ \t]+(.*))?[ \t]*$/;
+
+/** A bare `/` (or `/end`) closes the current scene — the text after it is
+ *  plain, unlabelled script again. Checked before SCENE_HEADER, which would
+ *  otherwise read `/end` as a tag. */
+export const SCENE_END = /^\/(?:end)?[ \t]*$/i;
 
 /** Starter shot vocabulary — merged with tags already used in the script. */
 export const STARTER_TAGS = [
@@ -16,12 +22,14 @@ export const STARTER_TAGS = [
 ] as const;
 
 export type Scene = {
-  /** null = untagged text before the first `/tag` line. */
+  /** null = untagged text (before the first `/tag`, or after a `/` end). */
   tag: string | null;
   note: string | null;
-  /** Character offset of the scene's first line (the header, if tagged). */
+  /** True when the first line is a marker (`/tag` header or `/` end). */
+  hasHeader: boolean;
+  /** Character offset of the scene's first line. */
   startChar: number;
-  /** Scene content including its header line. */
+  /** Scene content including its marker line, when it has one. */
   text: string;
   words: number;
   seconds: number;
@@ -42,25 +50,27 @@ function sceneSeconds(words: number): number {
 export function parseScenes(script: string): Scene[] {
   const lines = script.split("\n");
   const scenes: Scene[] = [];
-  let current: { tag: string | null; note: string | null; start: number } = {
-    tag: null,
-    note: null,
-    start: 0,
-  };
+  let current: {
+    tag: string | null;
+    note: string | null;
+    start: number;
+    hasHeader: boolean;
+  } = { tag: null, note: null, start: 0, hasHeader: false };
   let offset = 0;
-  let bodyStart = 0; // offset just past the current scene's header line
+  let bodyStart = 0; // offset just past the current scene's marker line
 
   const push = (end: number) => {
     const text = script.slice(current.start, end);
-    // Words exclude the header line itself — it's direction, not narration.
+    // Words exclude the marker line itself — it's direction, not narration.
     const body = script.slice(Math.min(bodyStart, end), end);
-    const words = wordCount(current.tag === null ? text : body);
+    const words = wordCount(current.hasHeader ? body : text);
     // Keep even whitespace-only untagged scenes: the editor backdrop must
     // reproduce every character so its line boxes match the textarea's.
     if (current.tag !== null || text.length > 0) {
       scenes.push({
         tag: current.tag,
         note: current.note,
+        hasHeader: current.hasHeader,
         startChar: current.start,
         text,
         words,
@@ -70,13 +80,15 @@ export function parseScenes(script: string): Scene[] {
   };
 
   for (const line of lines) {
-    const match = SCENE_HEADER.exec(line);
-    if (match) {
-      if (offset > 0) push(offset - 1); // exclude the \n before the header
+    const isEnd = SCENE_END.test(line);
+    const match = isEnd ? null : SCENE_HEADER.exec(line);
+    if (isEnd || match) {
+      if (offset > 0) push(offset - 1); // exclude the \n before the marker
       current = {
-        tag: match[1].toLowerCase(),
-        note: match[2]?.trim() || null,
+        tag: match ? match[1].toLowerCase() : null,
+        note: match ? match[2]?.trim() || null : null,
         start: offset,
+        hasHeader: true,
       };
       bodyStart = offset + line.length + 1;
     }

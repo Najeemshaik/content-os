@@ -20,22 +20,6 @@ const HUE = {
     "text-scene-5",
     "text-scene-6",
   ],
-  band: [
-    "bg-scene-1/4",
-    "bg-scene-2/4",
-    "bg-scene-3/4",
-    "bg-scene-4/4",
-    "bg-scene-5/4",
-    "bg-scene-6/4",
-  ],
-  rule: [
-    "shadow-[inset_2px_0_0_color-mix(in_oklab,var(--scene-1)_40%,transparent)]",
-    "shadow-[inset_2px_0_0_color-mix(in_oklab,var(--scene-2)_40%,transparent)]",
-    "shadow-[inset_2px_0_0_color-mix(in_oklab,var(--scene-3)_40%,transparent)]",
-    "shadow-[inset_2px_0_0_color-mix(in_oklab,var(--scene-4)_40%,transparent)]",
-    "shadow-[inset_2px_0_0_color-mix(in_oklab,var(--scene-5)_40%,transparent)]",
-    "shadow-[inset_2px_0_0_color-mix(in_oklab,var(--scene-6)_40%,transparent)]",
-  ],
   dot: [
     "bg-scene-1",
     "bg-scene-2",
@@ -48,12 +32,7 @@ const HUE = {
 
 export function hueClasses(tag: string) {
   const i = sceneHue(tag) - 1;
-  return {
-    text: HUE.text[i],
-    band: HUE.band[i],
-    rule: HUE.rule[i],
-    dot: HUE.dot[i],
-  };
+  return { text: HUE.text[i], dot: HUE.dot[i] };
 }
 
 export type ScriptEditorHandle = {
@@ -223,22 +202,21 @@ export function ScriptEditor({
           {scenes.map((scene, index) => {
             const hue = scene.tag ? hueClasses(scene.tag) : null;
             const lines = scene.text.split("\n");
-            const headerLine = scene.tag ? lines[0] : null;
-            const body = scene.tag ? lines.slice(1).join("\n") : scene.text;
+            const headerLine = scene.hasHeader ? lines[0] : null;
+            const body = scene.hasHeader
+              ? lines.slice(1).join("\n")
+              : scene.text;
             // A trailing newline needs a zero-width character to render its
             // empty line box, keeping backdrop and textarea line counts equal.
             const bodyText = body.endsWith("\n") ? `${body}\u200b` : body;
             return (
-              <div
-                key={scene.startChar}
-                data-scene={index}
-                className={cn(
-                  "-mx-2 rounded-md px-2 scroll-mt-24",
-                  hue && [hue.band, hue.rule],
-                )}
-              >
+              <div key={scene.startChar} data-scene={index} className="scroll-mt-24">
                 {headerLine !== null && (
-                  <div className={cn(hue?.text)}>{headerLine}</div>
+                  // The only paint: `/tag` lines in their hue, `/` end
+                  // markers dimmed. Body text stays plain.
+                  <div className={hue ? hue.text : "text-muted-foreground/50"}>
+                    {headerLine}
+                  </div>
                 )}
                 {bodyText.length > 0 && <div>{bodyText}</div>}
               </div>

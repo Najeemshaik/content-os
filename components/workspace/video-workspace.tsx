@@ -571,7 +571,7 @@ export function VideoWorkspace({
               textareaRef={scriptRef}
               handleRef={editorRef}
               placeholder={
-                "Write the script. Verbal hook first — say it like you'd say it on camera.\nType /interview, /broll, /talking-head… to mark scenes for the shot plan."
+                "Write the script. Verbal hook first — say it like you'd say it on camera.\nType /interview, /broll, /talking-head… to mark scenes for the shot plan. A lone / ends a scene."
               }
             />
           </section>
