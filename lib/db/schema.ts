@@ -69,6 +69,9 @@ export const videos = sqliteTable(
     hookWritten: text("hook_written"),
     hookVisual: text("hook_visual"),
     scriptBody: text("script_body"),
+    // Label of the script draft currently living in script_body; parallel
+    // drafts are shelved in script_drafts and swapped in via tabs.
+    scriptDraftName: text("script_draft_name").notNull().default("V1"),
     shotNotes: text("shot_notes"),
     structureId: text("structure_id").references(() => structures.id),
     seriesId: text("series_id").references(() => series.id),
@@ -95,6 +98,22 @@ export const videos = sqliteTable(
     index("videos_status_sort_idx").on(table.status, table.sortOrder),
     index("videos_scheduled_date_idx").on(table.scheduledDate),
   ],
+);
+
+/** Shelved parallel script versions — the active one lives on the video. */
+export const scriptDrafts = sqliteTable(
+  "script_drafts",
+  {
+    id: id(),
+    videoId: text("video_id")
+      .notNull()
+      .references(() => videos.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    body: text("body"),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (table) => [index("script_drafts_video_idx").on(table.videoId)],
 );
 
 export const scriptRevisions = sqliteTable(
@@ -153,6 +172,7 @@ export const settings = sqliteTable("settings", {
 export type Video = typeof videos.$inferSelect;
 export type NewVideo = typeof videos.$inferInsert;
 export type ScriptRevision = typeof scriptRevisions.$inferSelect;
+export type ScriptDraft = typeof scriptDrafts.$inferSelect;
 export type Series = typeof series.$inferSelect;
 export type Structure = typeof structures.$inferSelect;
 export type Outlier = typeof outliers.$inferSelect;

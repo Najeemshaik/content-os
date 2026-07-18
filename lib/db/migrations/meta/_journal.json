@@ -15,6 +15,13 @@
       "when": 1784211215361,
       "tag": "0001_dear_sauron",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1784387461408,
+      "tag": "0002_tiny_magik",
+      "breakpoints": true
     }
   ]
 }

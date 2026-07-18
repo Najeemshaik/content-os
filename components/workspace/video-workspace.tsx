@@ -15,7 +15,9 @@ import {
   Flame,
   GitBranch,
   History,
+  Plus,
   Trash2,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -28,6 +30,12 @@ import {
   updateVideo,
 } from "@/lib/actions/videos";
 import { createSnapshot } from "@/lib/actions/revisions";
+import {
+  deleteDraft,
+  newDraft,
+  restoreDraft,
+  switchDraft,
+} from "@/lib/actions/drafts";
 import { markStructureUsed } from "@/lib/actions/structures";
 import { runtimeLabel, wordCount } from "@/lib/script";
 import { parseScenes } from "@/lib/scenes";
@@ -40,6 +48,7 @@ import {
 } from "@/lib/types";
 import type {
   Outlier,
+  ScriptDraft,
   ScriptRevision,
   Structure,
   Video,
@@ -145,6 +154,7 @@ export function VideoWorkspace({
   structures,
   outliers,
   revisions,
+  drafts,
   flagged,
   lineage,
 }: {
@@ -156,6 +166,7 @@ export function VideoWorkspace({
     "id" | "creator" | "niche" | "hookVerbal" | "hookWritten" | "hookVisual"
   >[];
   revisions: ScriptRevision[];
+  drafts: ScriptDraft[];
   flagged: boolean;
   lineage: {
     parent: { id: string; title: string } | null;
@@ -178,6 +189,11 @@ export function VideoWorkspace({
     end: number;
   } | null>(null);
   const [deriving, setDeriving] = React.useState(false);
+  // Parallel script versions: shelved drafts + the active tab's label.
+  const [draftTabs, setDraftTabs] = React.useState<ScriptDraft[]>(drafts);
+  const [activeDraftName, setActiveDraftName] = React.useState(
+    video.scriptDraftName,
+  );
 
   const pendingRef = React.useRef<PendingPatch>({});
   const saveTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -305,6 +321,132 @@ export function VideoWorkspace({
     state.format === "long" && selection && selection.end > selection.start
       ? state.scriptBody.slice(selection.start, selection.end).trim()
       : "";
+
+  /** Apply a script body directly (draft swaps persist server-side). */
+  function setScriptDirect(body: string) {
+    delete pendingRef.current.scriptBody;
+    setState((prev) => ({ ...prev, scriptBody: body }));
+  }
+
+  function nextDraftName(): string {
+    const names = [...draftTabs.map((d) => d.name), activeDraftName];
+    const max = names.reduce((m, n) => {
+      const match = /^V(\d+)$/.exec(n);
+      return match ? Math.max(m, Number(match[1])) : m;
+    }, 0);
+    return `V${Math.max(max, names.length) + 1}`;
+  }
+
+  function startNewDraft() {
+    void (async () => {
+      await flushSave();
+      const shelfId = crypto.randomUUID();
+      const before = {
+        tabs: draftTabs,
+        name: activeDraftName,
+        body: state.scriptBody,
+      };
+      const name = nextDraftName();
+      setDraftTabs((prev) => [
+        ...prev,
+        {
+          id: shelfId,
+          videoId: video.id,
+          name: activeDraftName,
+          body: state.scriptBody || null,
+          createdAt: 0,
+          updatedAt: 0,
+        },
+      ]);
+      setActiveDraftName(name);
+      setScriptDirect("");
+      try {
+        const result = await newDraft({
+          videoId: video.id,
+          shelfId,
+          nextName: name,
+        });
+        if (!result.ok) throw new Error(result.error);
+      } catch (error) {
+        setDraftTabs(before.tabs);
+        setActiveDraftName(before.name);
+        setScriptDirect(before.body);
+        toast.error(
+          `Couldn't create draft — ${error instanceof Error ? error.message : "try again"}`,
+        );
+      }
+    })();
+  }
+
+  function switchToDraft(draft: ScriptDraft) {
+    void (async () => {
+      await flushSave();
+      const shelfId = crypto.randomUUID();
+      const before = {
+        tabs: draftTabs,
+        name: activeDraftName,
+        body: state.scriptBody,
+      };
+      setDraftTabs((prev) =>
+        prev.map((d) =>
+          d.id === draft.id
+            ? {
+                ...d,
+                id: shelfId,
+                name: activeDraftName,
+                body: state.scriptBody || null,
+              }
+            : d,
+        ),
+      );
+      setActiveDraftName(draft.name);
+      setScriptDirect(draft.body ?? "");
+      try {
+        const result = await switchDraft({
+          videoId: video.id,
+          draftId: draft.id,
+          shelfId,
+        });
+        if (!result.ok) throw new Error(result.error);
+      } catch (error) {
+        setDraftTabs(before.tabs);
+        setActiveDraftName(before.name);
+        setScriptDirect(before.body);
+        toast.error(
+          `Couldn't switch drafts — ${error instanceof Error ? error.message : "try again"}`,
+        );
+      }
+    })();
+  }
+
+  function removeDraft(draft: ScriptDraft) {
+    setDraftTabs((prev) => prev.filter((d) => d.id !== draft.id));
+    void (async () => {
+      try {
+        const result = await deleteDraft({ id: draft.id });
+        if (!result.ok) throw new Error(result.error);
+        toast.success(`Deleted ${draft.name}`, {
+          action: {
+            label: "Undo",
+            onClick: () => {
+              setDraftTabs((prev) => [...prev, draft]);
+              void restoreDraft({
+                id: draft.id,
+                videoId: draft.videoId,
+                name: draft.name,
+                body: draft.body,
+              });
+            },
+          },
+        });
+      } catch (error) {
+        setDraftTabs((prev) => [...prev, draft]);
+        toast.error(
+          `Couldn't delete — ${error instanceof Error ? error.message : "try again"}`,
+        );
+      }
+    })();
+  }
 
   function clip() {
     if (!selectedExcerpt || deriving) return;
@@ -495,6 +637,41 @@ export function VideoWorkspace({
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
         <div className="flex min-w-0 flex-col gap-4">
           <section className="rounded-2xl bg-card shadow-card">
+            {/* Script versions — tabs; the active one lives on the video,
+                the rest are shelved and swapped in on click. */}
+            <div className="flex items-center gap-1 overflow-x-auto border-b px-3 pt-2 pb-1.5">
+              <span className="rounded-md bg-accent px-2.5 py-1 text-xs font-medium">
+                {activeDraftName}
+              </span>
+              {draftTabs.map((draft) => (
+                <span key={draft.id} className="group/tab relative shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => switchToDraft(draft)}
+                    className="rounded-md px-2.5 py-1 pr-6 text-xs text-muted-foreground transition-colors hover:bg-accent/60 hover:text-foreground"
+                  >
+                    {draft.name}
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={`Delete ${draft.name}`}
+                    onClick={() => removeDraft(draft)}
+                    className="absolute top-1/2 right-1 flex size-4 -translate-y-1/2 items-center justify-center rounded text-muted-foreground/50 opacity-0 transition-opacity group-hover/tab:opacity-100 hover:bg-accent hover:text-destructive focus-visible:opacity-100"
+                  >
+                    <X className="size-3" aria-hidden />
+                  </button>
+                </span>
+              ))}
+              <button
+                type="button"
+                aria-label="New draft from scratch"
+                title="Shelve this version and start a fresh script"
+                onClick={startNewDraft}
+                className="flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+              >
+                <Plus className="size-3.5" aria-hidden />
+              </button>
+            </div>
             <div className="flex flex-wrap items-center gap-1 border-b px-4 py-2">
               <Button
                 variant="ghost"

@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 import { getDb } from "@/lib/db/client";
-import { scriptRevisions, videos } from "@/lib/db/schema";
+import { scriptDrafts, scriptRevisions, videos } from "@/lib/db/schema";
 import { snapshotVideo } from "@/lib/db/revisions";
 import {
   VIDEO_FORMATS,
@@ -233,6 +233,10 @@ export async function deleteVideo(input: unknown): Promise<ActionResult> {
     await db
       .delete(scriptRevisions)
       .where(eq(scriptRevisions.videoId, id))
+      .run();
+    await db
+      .delete(scriptDrafts)
+      .where(eq(scriptDrafts.videoId, id))
       .run();
     const result = await db.delete(videos).where(eq(videos.id, id)).run();
     if (result.rowsAffected === 0)

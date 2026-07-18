@@ -4,6 +4,7 @@ import { getDb } from "@/lib/db/client";
 import { getFlagContext } from "@/lib/db/flags";
 import {
   outliers,
+  scriptDrafts,
   scriptRevisions,
   series,
   structures,
@@ -50,6 +51,13 @@ export default async function VideoPage(props: PageProps<"/video/[id]">) {
     .orderBy(desc(scriptRevisions.createdAt))
     .all();
 
+  const drafts = await db
+    .select()
+    .from(scriptDrafts)
+    .where(eq(scriptDrafts.videoId, id))
+    .orderBy(asc(scriptDrafts.createdAt))
+    .all();
+
   const parent = video.doubleDownOf
     ? ((await db
         .select({ id: videos.id, title: videos.title })
@@ -87,6 +95,7 @@ export default async function VideoPage(props: PageProps<"/video/[id]">) {
       structures={allStructures}
       outliers={outlierHooks}
       revisions={revisions}
+      drafts={drafts}
       flagged={flaggedIds.has(id)}
       lineage={{ parent, variants, clipParent, clips }}
     />

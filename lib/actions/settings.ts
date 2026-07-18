@@ -6,6 +6,7 @@ import { getDb } from "@/lib/db/client";
 import {
   outliers,
   rhythmSlots,
+  scriptDrafts,
   scriptRevisions,
   series,
   settings,
@@ -75,6 +76,7 @@ export type ExportPayload = {
   tables: {
     videos: unknown[];
     scriptRevisions: unknown[];
+    scriptDrafts?: unknown[];
     series: unknown[];
     structures: unknown[];
     outliers: unknown[];
@@ -93,6 +95,7 @@ export async function exportData(): Promise<ActionResult<ExportPayload>> {
       tables: {
         videos: await db.select().from(videos).all(),
         scriptRevisions: await db.select().from(scriptRevisions).all(),
+        scriptDrafts: await db.select().from(scriptDrafts).all(),
         series: await db.select().from(series).all(),
         structures: await db.select().from(structures).all(),
         outliers: await db.select().from(outliers).all(),
@@ -112,6 +115,8 @@ const importSchema = z.object({
   tables: z.object({
     videos: z.array(z.record(z.string(), z.unknown())),
     scriptRevisions: z.array(z.record(z.string(), z.unknown())),
+    // Absent in exports made before script drafts existed.
+    scriptDrafts: z.array(z.record(z.string(), z.unknown())).default([]),
     series: z.array(z.record(z.string(), z.unknown())),
     structures: z.array(z.record(z.string(), z.unknown())),
     outliers: z.array(z.record(z.string(), z.unknown())),
@@ -129,6 +134,7 @@ export async function importData(input: unknown): Promise<ActionResult> {
     const db = await getDb();
     await db.transaction(async (tx) => {
       await tx.delete(scriptRevisions).run();
+      await tx.delete(scriptDrafts).run();
       await tx.delete(videos).run();
       await tx.delete(outliers).run();
       await tx.delete(structures).run();
@@ -146,6 +152,11 @@ export async function importData(input: unknown): Promise<ActionResult> {
         await tx
           .insert(scriptRevisions)
           .values(t.scriptRevisions as Rows as never)
+          .run();
+      if (t.scriptDrafts.length)
+        await tx
+          .insert(scriptDrafts)
+          .values(t.scriptDrafts as Rows as never)
           .run();
       if (t.outliers.length)
         await tx.insert(outliers).values(t.outliers as Rows as never).run();
