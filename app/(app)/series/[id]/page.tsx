@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { and, asc, eq, isNull } from "drizzle-orm";
 import { getDb } from "@/lib/db/client";
-import { series, videos } from "@/lib/db/schema";
+import { series, videos, videoSeries } from "@/lib/db/schema";
 import { SeriesDetail } from "@/components/series/series-detail";
 
 export const dynamic = "force-dynamic";
@@ -20,11 +20,12 @@ export default async function SeriesDetailPage(
       title: videos.title,
       type: videos.type,
       status: videos.status,
-      episodeNumber: videos.episodeNumber,
+      episodeNumber: videoSeries.episodeNumber,
     })
-    .from(videos)
-    .where(and(eq(videos.seriesId, id), isNull(videos.archivedAt)))
-    .orderBy(asc(videos.episodeNumber), asc(videos.createdAt))
+    .from(videoSeries)
+    .innerJoin(videos, eq(videoSeries.videoId, videos.id))
+    .where(and(eq(videoSeries.seriesId, id), isNull(videos.archivedAt)))
+    .orderBy(asc(videoSeries.episodeNumber), asc(videos.createdAt))
     .all();
 
   return <SeriesDetail series={row} episodes={episodes} />;

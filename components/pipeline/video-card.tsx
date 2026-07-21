@@ -60,8 +60,7 @@ export type BoardVideo = {
   status: VideoStatus;
   scheduledDate: string | null;
   sortOrder: number;
-  seriesName: string | null;
-  episodeNumber: number | null;
+  series: { name: string; episodeNumber: number | null }[];
   doubleDownOf: string | null;
   clipOf: string | null;
   sceneCount: number;
@@ -141,7 +140,9 @@ export function VideoCardContent({ video }: { video: BoardVideo }) {
       >
         {video.title}
       </Link>
-      {(video.seriesName || video.scheduledDate || video.sceneCount > 0) && (
+      {(video.series.length > 0 ||
+        video.scheduledDate ||
+        video.sceneCount > 0) && (
         <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
           {video.sceneCount > 0 && (
             <span
@@ -153,12 +154,14 @@ export function VideoCardContent({ video }: { video: BoardVideo }) {
               {video.shotTypeCount === 1 ? "shot type" : "shot types"}
             </span>
           )}
-          {video.seriesName && (
+          {video.series.length > 0 && (
             <span className="inline-flex min-w-0 items-center gap-1">
               <ListVideo className="size-3 shrink-0" aria-hidden />
               <span className="truncate">
-                {video.seriesName}
-                {video.episodeNumber != null && ` · ${video.episodeNumber}`}
+                {video.series[0].name}
+                {video.series[0].episodeNumber != null &&
+                  ` · ${video.series[0].episodeNumber}`}
+                {video.series.length > 1 && ` +${video.series.length - 1}`}
               </span>
             </span>
           )}

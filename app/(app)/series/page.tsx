@@ -1,6 +1,6 @@
 import { asc, eq, isNull, and } from "drizzle-orm";
 import { getDb } from "@/lib/db/client";
-import { series, videos } from "@/lib/db/schema";
+import { series, videos, videoSeries } from "@/lib/db/schema";
 import {
   SeriesList,
   type SeriesWithProgress,
@@ -19,8 +19,9 @@ export default async function SeriesPage() {
     seriesRows.map(async (s) => {
       const episodes = await db
         .select({ status: videos.status })
-        .from(videos)
-        .where(and(eq(videos.seriesId, s.id), isNull(videos.archivedAt)))
+        .from(videoSeries)
+        .innerJoin(videos, eq(videoSeries.videoId, videos.id))
+        .where(and(eq(videoSeries.seriesId, s.id), isNull(videos.archivedAt)))
         .all();
       return {
         ...s,

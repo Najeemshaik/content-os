@@ -1,6 +1,7 @@
 import {
   index,
   integer,
+  primaryKey,
   real,
   sqliteTable,
   text,
@@ -42,6 +43,26 @@ export const series = sqliteTable("series", {
   createdAt: createdAt(),
   updatedAt: updatedAt(),
 });
+
+/** A video can belong to several series; the episode number is per
+ *  membership (episode 3 of one series, episode 1 of another). */
+export const videoSeries = sqliteTable(
+  "video_series",
+  {
+    videoId: text("video_id")
+      .notNull()
+      .references((): AnySQLiteColumn => videos.id, { onDelete: "cascade" }),
+    seriesId: text("series_id")
+      .notNull()
+      .references(() => series.id, { onDelete: "cascade" }),
+    episodeNumber: integer("episode_number"),
+    createdAt: createdAt(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.videoId, table.seriesId] }),
+    index("video_series_series_idx").on(table.seriesId),
+  ],
+);
 
 export const structures = sqliteTable("structures", {
   id: id(),
@@ -174,6 +195,7 @@ export type NewVideo = typeof videos.$inferInsert;
 export type ScriptRevision = typeof scriptRevisions.$inferSelect;
 export type ScriptDraft = typeof scriptDrafts.$inferSelect;
 export type Series = typeof series.$inferSelect;
+export type VideoSeries = typeof videoSeries.$inferSelect;
 export type Structure = typeof structures.$inferSelect;
 export type Outlier = typeof outliers.$inferSelect;
 export type RhythmSlot = typeof rhythmSlots.$inferSelect;

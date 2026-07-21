@@ -98,8 +98,6 @@ const updateVideoSchema = z.object({
   scriptBody: z.string().nullable().optional(),
   shotNotes: z.string().nullable().optional(),
   structureId: z.uuid().nullable().optional(),
-  seriesId: z.uuid().nullable().optional(),
-  episodeNumber: z.number().int().min(1).nullable().optional(),
   scheduledDate: z.iso.date().nullable().optional(),
   views: z.number().int().min(0).optional(),
   likes: z.number().int().min(0).optional(),

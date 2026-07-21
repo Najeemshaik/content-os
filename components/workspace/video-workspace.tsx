@@ -15,6 +15,7 @@ import {
   Flame,
   GitBranch,
   History,
+  ListVideo,
   Plus,
   Trash2,
   X,
@@ -36,6 +37,11 @@ import {
   restoreDraft,
   switchDraft,
 } from "@/lib/actions/drafts";
+import {
+  addToSeries,
+  removeFromSeries,
+  setEpisodeNumber as setEpisodeNumberAction,
+} from "@/lib/actions/video-series";
 import { markStructureUsed } from "@/lib/actions/structures";
 import { runtimeLabel, wordCount } from "@/lib/script";
 import { parseScenes } from "@/lib/scenes";
@@ -114,8 +120,6 @@ type Editable = {
   hookVisual: string;
   scriptBody: string;
   shotNotes: string;
-  seriesId: string | null;
-  episodeNumber: number | null;
   scheduledDate: string | null;
 };
 
@@ -142,11 +146,15 @@ function toEditable(video: Video): Editable {
     hookVisual: video.hookVisual ?? "",
     scriptBody: video.scriptBody ?? "",
     shotNotes: video.shotNotes ?? "",
-    seriesId: video.seriesId,
-    episodeNumber: video.episodeNumber,
     scheduledDate: video.scheduledDate,
   };
 }
+
+type SeriesMembership = {
+  seriesId: string;
+  name: string;
+  episodeNumber: number | null;
+};
 
 export function VideoWorkspace({
   video,
@@ -155,6 +163,7 @@ export function VideoWorkspace({
   outliers,
   revisions,
   drafts,
+  seriesMemberships,
   flagged,
   lineage,
 }: {
@@ -167,6 +176,7 @@ export function VideoWorkspace({
   >[];
   revisions: ScriptRevision[];
   drafts: ScriptDraft[];
+  seriesMemberships: SeriesMembership[];
   flagged: boolean;
   lineage: {
     parent: { id: string; title: string } | null;
@@ -194,6 +204,9 @@ export function VideoWorkspace({
   const [activeDraftName, setActiveDraftName] = React.useState(
     video.scriptDraftName,
   );
+  // Series memberships (a video can belong to several series).
+  const [videoSeriesList, setVideoSeriesList] =
+    React.useState<SeriesMembership[]>(seriesMemberships);
 
   const pendingRef = React.useRef<PendingPatch>({});
   const saveTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -446,6 +459,76 @@ export function VideoWorkspace({
         );
       }
     })();
+  }
+
+  /* ── Series memberships ─────────────────────────────────────── */
+
+  function addSeries(option: { id: string; name: string }) {
+    const before = videoSeriesList;
+    setVideoSeriesList((prev) => [
+      ...prev,
+      { seriesId: option.id, name: option.name, episodeNumber: null },
+    ]);
+    void (async () => {
+      try {
+        const result = await addToSeries({
+          videoId: video.id,
+          seriesId: option.id,
+        });
+        if (!result.ok) throw new Error(result.error);
+        // Adopt the server-assigned episode number.
+        setVideoSeriesList((prev) =>
+          prev.map((m) =>
+            m.seriesId === option.id
+              ? { ...m, episodeNumber: result.data?.episodeNumber ?? null }
+              : m,
+          ),
+        );
+      } catch (error) {
+        setVideoSeriesList(before);
+        toast.error(
+          `Couldn't add to series — ${error instanceof Error ? error.message : "try again"}`,
+        );
+      }
+    })();
+  }
+
+  function removeSeries(seriesId: string) {
+    const before = videoSeriesList;
+    setVideoSeriesList((prev) => prev.filter((m) => m.seriesId !== seriesId));
+    void (async () => {
+      try {
+        const result = await removeFromSeries({ videoId: video.id, seriesId });
+        if (!result.ok) throw new Error(result.error);
+      } catch (error) {
+        setVideoSeriesList(before);
+        toast.error(
+          `Couldn't remove — ${error instanceof Error ? error.message : "try again"}`,
+        );
+      }
+    })();
+  }
+
+  const episodeTimers = React.useRef(
+    new Map<string, ReturnType<typeof setTimeout>>(),
+  );
+  function setEpisode(seriesId: string, episodeNumber: number | null) {
+    setVideoSeriesList((prev) =>
+      prev.map((m) => (m.seriesId === seriesId ? { ...m, episodeNumber } : m)),
+    );
+    const timers = episodeTimers.current;
+    const existing = timers.get(seriesId);
+    if (existing) clearTimeout(existing);
+    timers.set(
+      seriesId,
+      setTimeout(() => {
+        void setEpisodeNumberAction({
+          videoId: video.id,
+          seriesId,
+          episodeNumber,
+        });
+      }, 500),
+    );
   }
 
   function clip() {
@@ -825,58 +908,87 @@ export function VideoWorkspace({
                 </SelectContent>
               </Select>
 
-              <span className="text-xs text-muted-foreground">Series</span>
-              <div className="flex items-center gap-1.5">
-                <Select
-                  value={state.seriesId ?? "none"}
-                  onValueChange={(v) =>
-                    patch(
-                      {
-                        seriesId: v === "none" ? null : v,
-                        ...(v === "none" ? { episodeNumber: null } : {}),
-                      },
-                      { immediate: true },
-                    )
-                  }
-                >
-                  <SelectTrigger
-                    size="sm"
-                    aria-label="Series"
-                    className="min-w-0 flex-1"
-                  >
-                    <span className="truncate">
-                      {state.seriesId
-                        ? (seriesOptions.find((s) => s.id === state.seriesId)
-                            ?.name ?? "Series")
-                        : "No series"}
+              <span className="self-start pt-1.5 text-xs text-muted-foreground">
+                Series
+              </span>
+              <div className="flex flex-col gap-1.5">
+                {videoSeriesList.map((m) => (
+                  <div key={m.seriesId} className="flex items-center gap-1.5">
+                    <span className="inline-flex min-w-0 flex-1 items-center gap-1.5 rounded-md bg-accent/60 px-2 py-1 text-sm">
+                      <ListVideo
+                        className="size-3 shrink-0 text-muted-foreground"
+                        aria-hidden
+                      />
+                      <span className="truncate">{m.name}</span>
                     </span>
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">No series</SelectItem>
-                    {seriesOptions.map((s) => (
-                      <SelectItem key={s.id} value={s.id}>
-                        {s.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {state.seriesId && (
-                  <Input
-                    type="number"
-                    min={1}
-                    value={state.episodeNumber ?? ""}
-                    onChange={(e) =>
-                      patch({
-                        episodeNumber: e.target.value
-                          ? Math.max(1, Number(e.target.value))
-                          : null,
-                      })
-                    }
-                    aria-label="Episode number"
-                    placeholder="#"
-                    className="h-8 w-14 shrink-0 text-sm"
-                  />
-                )}
+                    <Input
+                      type="number"
+                      min={1}
+                      value={m.episodeNumber ?? ""}
+                      onChange={(e) =>
+                        setEpisode(
+                          m.seriesId,
+                          e.target.value
+                            ? Math.max(1, Number(e.target.value))
+                            : null,
+                        )
+                      }
+                      aria-label={`Episode number in ${m.name}`}
+                      placeholder="#"
+                      className="h-8 w-12 shrink-0 text-sm"
+                    />
+                    <button
+                      type="button"
+                      aria-label={`Remove from ${m.name}`}
+                      onClick={() => removeSeries(m.seriesId)}
+                      className="flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-destructive"
+                    >
+                      <X className="size-3.5" aria-hidden />
+                    </button>
+                  </div>
+                ))}
+                {(() => {
+                  const available = seriesOptions.filter(
+                    (s) => !videoSeriesList.some((m) => m.seriesId === s.id),
+                  );
+                  if (seriesOptions.length === 0)
+                    return (
+                      <Link
+                        href="/series"
+                        className="text-xs text-muted-foreground hover:text-foreground hover:underline"
+                      >
+                        Create a series first →
+                      </Link>
+                    );
+                  if (available.length === 0) return null;
+                  return (
+                    <Select
+                      value=""
+                      onValueChange={(v) => {
+                        const opt = seriesOptions.find((s) => s.id === v);
+                        if (opt) addSeries(opt);
+                      }}
+                    >
+                      <SelectTrigger
+                        size="sm"
+                        aria-label="Add to series"
+                        className="w-full text-muted-foreground"
+                      >
+                        <span className="inline-flex items-center gap-1.5">
+                          <Plus className="size-3.5" aria-hidden />
+                          Add to series
+                        </span>
+                      </SelectTrigger>
+                      <SelectContent>
+                        {available.map((s) => (
+                          <SelectItem key={s.id} value={s.id}>
+                            {s.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  );
+                })()}
               </div>
 
               <span className="text-xs text-muted-foreground">Scheduled</span>

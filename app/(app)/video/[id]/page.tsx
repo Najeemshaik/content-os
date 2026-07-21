@@ -9,6 +9,7 @@ import {
   series,
   structures,
   videos,
+  videoSeries,
 } from "@/lib/db/schema";
 import { VideoWorkspace } from "@/components/workspace/video-workspace";
 
@@ -58,6 +59,18 @@ export default async function VideoPage(props: PageProps<"/video/[id]">) {
     .orderBy(asc(scriptDrafts.createdAt))
     .all();
 
+  const videoSeriesRows = await db
+    .select({
+      seriesId: videoSeries.seriesId,
+      name: series.name,
+      episodeNumber: videoSeries.episodeNumber,
+    })
+    .from(videoSeries)
+    .innerJoin(series, eq(videoSeries.seriesId, series.id))
+    .where(eq(videoSeries.videoId, id))
+    .orderBy(asc(series.name))
+    .all();
+
   const parent = video.doubleDownOf
     ? ((await db
         .select({ id: videos.id, title: videos.title })
@@ -96,6 +109,7 @@ export default async function VideoPage(props: PageProps<"/video/[id]">) {
       outliers={outlierHooks}
       revisions={revisions}
       drafts={drafts}
+      seriesMemberships={videoSeriesRows}
       flagged={flaggedIds.has(id)}
       lineage={{ parent, variants, clipParent, clips }}
     />

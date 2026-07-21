@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { desc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { getDb } from "@/lib/db/client";
-import { series, videos } from "@/lib/db/schema";
+import { series, videos, videoSeries } from "@/lib/db/schema";
 import {
   SERIES_STATUSES,
   SERIES_TYPES,
@@ -71,6 +71,8 @@ export async function deleteSeries(input: unknown): Promise<ActionResult> {
     const { id } = z.object({ id: z.uuid() }).parse(input);
     const db = await getDb();
     await db.transaction(async (tx) => {
+      // Detach the vestigial single-series column (its FK must stay valid),
+      // then delete the series — video_series rows cascade automatically.
       await tx
         .update(videos)
         .set({ seriesId: null, episodeNumber: null })
@@ -101,12 +103,13 @@ export async function addNextEpisode(
     if (!parent) return { ok: false, error: "Series not found" };
     const latest = await db
       .select({
-        episodeNumber: videos.episodeNumber,
+        episodeNumber: videoSeries.episodeNumber,
         type: videos.type,
       })
-      .from(videos)
-      .where(eq(videos.seriesId, seriesId))
-      .orderBy(desc(videos.episodeNumber))
+      .from(videoSeries)
+      .innerJoin(videos, eq(videoSeries.videoId, videos.id))
+      .where(eq(videoSeries.seriesId, seriesId))
+      .orderBy(desc(videoSeries.episodeNumber))
       .get();
     const episodeNumber = (latest?.episodeNumber ?? 0) + 1;
     const id = crypto.randomUUID();
@@ -115,18 +118,22 @@ export async function addNextEpisode(
       .from(videos)
       .where(eq(videos.status, "idea"))
       .get();
-    await db
-      .insert(videos)
-      .values({
-        id,
-        title: `${parent.name} — episode ${episodeNumber}`,
-        type: latest?.type ?? "story",
-        status: "idea",
-        seriesId,
-        episodeNumber,
-        sortOrder: (row?.min ?? 2000) - 1000,
-      })
-      .run();
+    await db.transaction(async (tx) => {
+      await tx
+        .insert(videos)
+        .values({
+          id,
+          title: `${parent.name} — episode ${episodeNumber}`,
+          type: latest?.type ?? "story",
+          status: "idea",
+          sortOrder: (row?.min ?? 2000) - 1000,
+        })
+        .run();
+      await tx
+        .insert(videoSeries)
+        .values({ videoId: id, seriesId, episodeNumber })
+        .run();
+    });
     revalidatePath("/", "layout");
     return { ok: true, data: { id, episodeNumber } };
   } catch (error) {

@@ -8,6 +8,7 @@ import {
   rhythmSlots,
   scriptDrafts,
   scriptRevisions,
+  videoSeries,
   series,
   settings,
   structures,
@@ -77,6 +78,7 @@ export type ExportPayload = {
     videos: unknown[];
     scriptRevisions: unknown[];
     scriptDrafts?: unknown[];
+    videoSeries?: unknown[];
     series: unknown[];
     structures: unknown[];
     outliers: unknown[];
@@ -96,6 +98,7 @@ export async function exportData(): Promise<ActionResult<ExportPayload>> {
         videos: await db.select().from(videos).all(),
         scriptRevisions: await db.select().from(scriptRevisions).all(),
         scriptDrafts: await db.select().from(scriptDrafts).all(),
+        videoSeries: await db.select().from(videoSeries).all(),
         series: await db.select().from(series).all(),
         structures: await db.select().from(structures).all(),
         outliers: await db.select().from(outliers).all(),
@@ -117,6 +120,7 @@ const importSchema = z.object({
     scriptRevisions: z.array(z.record(z.string(), z.unknown())),
     // Absent in exports made before script drafts existed.
     scriptDrafts: z.array(z.record(z.string(), z.unknown())).default([]),
+    videoSeries: z.array(z.record(z.string(), z.unknown())).default([]),
     series: z.array(z.record(z.string(), z.unknown())),
     structures: z.array(z.record(z.string(), z.unknown())),
     outliers: z.array(z.record(z.string(), z.unknown())),
@@ -135,6 +139,7 @@ export async function importData(input: unknown): Promise<ActionResult> {
     await db.transaction(async (tx) => {
       await tx.delete(scriptRevisions).run();
       await tx.delete(scriptDrafts).run();
+      await tx.delete(videoSeries).run();
       await tx.delete(videos).run();
       await tx.delete(outliers).run();
       await tx.delete(structures).run();
@@ -158,6 +163,24 @@ export async function importData(input: unknown): Promise<ActionResult> {
           .insert(scriptDrafts)
           .values(t.scriptDrafts as Rows as never)
           .run();
+      if (t.videoSeries.length)
+        await tx
+          .insert(videoSeries)
+          .values(t.videoSeries as Rows as never)
+          .run();
+      else if (t.videos.length)
+        // Backfill memberships from an old export's single-series column.
+        for (const v of t.videos as Rows) {
+          if (v.seriesId)
+            await tx
+              .insert(videoSeries)
+              .values({
+                videoId: v.id,
+                seriesId: v.seriesId,
+                episodeNumber: v.episodeNumber ?? null,
+              } as never)
+              .run();
+        }
       if (t.outliers.length)
         await tx.insert(outliers).values(t.outliers as Rows as never).run();
       if (t.rhythmSlots.length)

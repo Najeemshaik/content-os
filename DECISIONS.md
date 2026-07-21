@@ -112,6 +112,14 @@ Judgment calls made while building, per the PRD's instruction to decide and log 
 - Deferred: cross-video "filming day" view grouping Production-stage scenes by tag across videos.
 - **Iterated with the owner to final grammar**: `/tag` opens a scene marked by a solid gutter line spanning exactly its lines; a blank line ends it (caret-aware — the empty line a single Enter creates stays in the scene while writing); `>Name` opens a **collapsible section** (chevron header row with rename input, scene-count/runtime meta, and a remove-header button). Sections are one editor block each (a textarea can't fold lines), spliced back into the single `scriptBody` string on every edit; a caret handoff (`pendingCaretRef` + layout effect) keeps typing seamless when a `>` line splits a block. Empty between-scene lines render a zero-width-space line box so the transparent-textarea/backdrop layers never drift.
 
+## Multi-series membership (owner request, 2026-07-21)
+
+- **A video can now belong to several series** — new `video_series` join table (composite PK video_id+series_id, per-membership `episode_number`; migration 0003 backfills from the old single-series columns). `video_series` is the source of truth going forward.
+- **Kept the vestigial `videos.seriesId`/`episodeNumber` columns** rather than dropping them: SQLite/libSQL `DROP COLUMN` chokes on a column that's the child of a FK constraint, and dropping them would break importing pre-existing export files. New code reads/writes only `video_series`; `deleteSeries` still nulls the vestigial `seriesId` so its FK stays valid (video_series rows cascade). Removed `seriesId`/`episodeNumber` from `updateVideoSchema` (UI no longer sets them).
+- **Workspace Details** shows series as removable chips with a per-membership episode `#` input (500ms-debounced) + an "Add to series" select of the not-yet-added options; adding auto-numbers the next episode (server-assigned, adopted optimistically). Board card shows the first series (name · ep) with `+N` for the rest.
+- **Episode numbering is per membership** — a video can be episode 3 of one series and episode 1 of another. Series detail / "Add episode N+1" / list counts all read through `video_series`.
+- Export/import gained `videoSeries` (zod-optional); importing an old export with no `videoSeries` backfills memberships from each video's legacy `seriesId`.
+
 ## Empty start (owner request, 2026-07-16)
 
 - **All hardcoded seed content removed** — the PRD §8 demo videos, structures, and rhythm slots no longer ship. `seedIfEmpty` now ensures only the `rolling_average_window` setting (and keys off the `settings` table, since `videos` is legitimately empty). The live DB's demo/test rows were deleted the same day. Rhythm is configured in Settings; structures are added in Banks.

@@ -2,7 +2,7 @@ import { asc, eq, isNull } from "drizzle-orm";
 import { getDb } from "@/lib/db/client";
 import { getFlagContext } from "@/lib/db/flags";
 import { parseScenes } from "@/lib/scenes";
-import { rhythmSlots, series, videos } from "@/lib/db/schema";
+import { rhythmSlots, series, videos, videoSeries } from "@/lib/db/schema";
 import { PipelineBoard } from "@/components/pipeline/pipeline-board";
 import type { BoardVideo } from "@/components/pipeline/video-card";
 
@@ -19,17 +19,35 @@ export default async function PipelinePage() {
       status: videos.status,
       scheduledDate: videos.scheduledDate,
       sortOrder: videos.sortOrder,
-      episodeNumber: videos.episodeNumber,
       doubleDownOf: videos.doubleDownOf,
       clipOf: videos.clipOf,
-      seriesName: series.name,
       scriptBody: videos.scriptBody,
     })
     .from(videos)
-    .leftJoin(series, eq(videos.seriesId, series.id))
     .where(isNull(videos.archivedAt))
     .orderBy(asc(videos.sortOrder))
     .all();
+
+  // Series memberships (a video can be in several), grouped per video.
+  const memberships = await db
+    .select({
+      videoId: videoSeries.videoId,
+      name: series.name,
+      episodeNumber: videoSeries.episodeNumber,
+    })
+    .from(videoSeries)
+    .innerJoin(series, eq(videoSeries.seriesId, series.id))
+    .orderBy(asc(series.name))
+    .all();
+  const seriesByVideo = new Map<
+    string,
+    { name: string; episodeNumber: number | null }[]
+  >();
+  for (const m of memberships) {
+    const list = seriesByVideo.get(m.videoId) ?? [];
+    list.push({ name: m.name, episodeNumber: m.episodeNumber });
+    seriesByVideo.set(m.videoId, list);
+  }
 
   const slots = await db
     .select({
@@ -50,6 +68,7 @@ export default async function PipelinePage() {
     const tagged = parseScenes(scriptBody ?? "").filter((s) => s.tag);
     return {
       ...row,
+      series: seriesByVideo.get(row.id) ?? [],
       sceneCount: tagged.length,
       shotTypeCount: new Set(tagged.map((s) => s.tag)).size,
       flagged: flaggedIds.has(row.id),
