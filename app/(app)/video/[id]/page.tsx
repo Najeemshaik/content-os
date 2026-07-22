@@ -17,6 +17,7 @@ export const dynamic = "force-dynamic";
 
 export default async function VideoPage(props: PageProps<"/video/[id]">) {
   const { id } = await props.params;
+  const { series: fromSeriesId } = await props.searchParams;
   const db = await getDb();
   const video = await db.select().from(videos).where(eq(videos.id, id)).get();
   if (!video) notFound();
@@ -101,8 +102,20 @@ export default async function VideoPage(props: PageProps<"/video/[id]">) {
 
   const { flaggedIds } = await getFlagContext(video.format);
 
+  // Arrived from a series page (?series=id) — point the back link there,
+  // but only if the video really belongs to that series.
+  const fromSeries =
+    typeof fromSeriesId === "string"
+      ? (videoSeriesRows.find((m) => m.seriesId === fromSeriesId) ?? null)
+      : null;
+
   return (
     <VideoWorkspace
+      backLink={
+        fromSeries
+          ? { href: `/series/${fromSeries.seriesId}`, label: fromSeries.name }
+          : { href: "/", label: "Pipeline" }
+      }
       video={video}
       seriesOptions={seriesOptions}
       structures={allStructures}

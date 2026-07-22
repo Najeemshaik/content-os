@@ -37,9 +37,15 @@ export function SeriesList({ series }: { series: SeriesWithProgress[] }) {
       />
 
       {series.length === 0 ? (
-        <p className="rounded-2xl bg-muted/50 px-4 py-8 text-center text-sm text-muted-foreground">
-          Start a series to plan daily, progress, or lesson episodes.
-        </p>
+        <div className="flex flex-col items-center gap-3 rounded-2xl bg-muted/50 px-4 py-10 text-center">
+          <p className="text-sm text-muted-foreground">
+            Start a series to plan daily, progress, or lesson episodes.
+          </p>
+          <Button size="sm" className="gap-1.5" onClick={() => setFormOpen(true)}>
+            <Plus className="size-3.5" aria-hidden />
+            New series
+          </Button>
+        </div>
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {series.map((s) => {

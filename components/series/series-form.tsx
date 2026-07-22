@@ -76,13 +76,20 @@ export function SeriesFormDialog({
         targetEpisodes: target ? Math.max(1, Math.floor(Number(target))) : null,
       };
       try {
-        const result = series
-          ? await updateSeries({ id: series.id, ...payload })
-          : await createSeries(payload);
-        if (!result.ok) throw new Error(result.error);
-        toast.success(series ? "Series updated" : "Series created");
-        onOpenChange(false);
-        router.refresh();
+        if (series) {
+          const result = await updateSeries({ id: series.id, ...payload });
+          if (!result.ok) throw new Error(result.error);
+          toast.success("Series updated");
+          onOpenChange(false);
+          router.refresh();
+        } else {
+          const result = await createSeries(payload);
+          if (!result.ok) throw new Error(result.error);
+          if (!result.data) throw new Error("try again");
+          toast.success("Series created — add episode 1 when ready");
+          onOpenChange(false);
+          router.push(`/series/${result.data.id}`);
+        }
       } catch (error) {
         toast.error(
           `Couldn't save — ${error instanceof Error ? error.message : "try again"}`,

@@ -157,6 +157,7 @@ type SeriesMembership = {
 };
 
 export function VideoWorkspace({
+  backLink,
   video,
   seriesOptions,
   structures,
@@ -167,6 +168,7 @@ export function VideoWorkspace({
   flagged,
   lineage,
 }: {
+  backLink: { href: string; label: string };
   video: Video;
   seriesOptions: { id: string; name: string }[];
   structures: Structure[];
@@ -652,11 +654,11 @@ export function VideoWorkspace({
       <div className="flex flex-col gap-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <Link
-            href="/"
+            href={backLink.href}
             className="inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
           >
             <ArrowLeft className="size-4" aria-hidden />
-            Pipeline
+            {backLink.label}
           </Link>
           <div className="flex items-center gap-3">
             <SaveIndicator state={saveState} />
@@ -914,13 +916,17 @@ export function VideoWorkspace({
               <div className="flex flex-col gap-1.5">
                 {videoSeriesList.map((m) => (
                   <div key={m.seriesId} className="flex items-center gap-1.5">
-                    <span className="inline-flex min-w-0 flex-1 items-center gap-1.5 rounded-md bg-accent/60 px-2 py-1 text-sm">
+                    <Link
+                      href={`/series/${m.seriesId}`}
+                      title={`Open ${m.name}`}
+                      className="inline-flex min-w-0 flex-1 items-center gap-1.5 rounded-md bg-accent/60 px-2 py-1 text-sm transition-colors hover:bg-accent"
+                    >
                       <ListVideo
                         className="size-3 shrink-0 text-muted-foreground"
                         aria-hidden
                       />
                       <span className="truncate">{m.name}</span>
-                    </span>
+                    </Link>
                     <Input
                       type="number"
                       min={1}

@@ -57,15 +57,9 @@ export function SeriesDetail({
       try {
         const result = await addNextEpisode({ seriesId: series.id });
         if (!result.ok) throw new Error(result.error);
-        toast.success(`Episode ${result.data?.episodeNumber} added to Ideas`, {
-          action: result.data
-            ? {
-                label: "Open",
-                onClick: () => router.push(`/video/${result.data!.id}`),
-              }
-            : undefined,
-        });
-        router.refresh();
+        if (!result.data) throw new Error("try again");
+        toast.success(`Episode ${result.data.episodeNumber} created`);
+        router.push(`/video/${result.data.id}?series=${series.id}`);
       } catch (error) {
         toast.error(
           `Couldn't add episode — ${error instanceof Error ? error.message : "try again"}`,
@@ -148,7 +142,7 @@ export function SeriesDetail({
         {episodes.map((episode) => (
           <Link
             key={episode.id}
-            href={`/video/${episode.id}`}
+            href={`/video/${episode.id}?series=${series.id}`}
             className="flex items-center gap-3 rounded-xl bg-card px-3.5 py-2.5 shadow-card transition-shadow hover:shadow-card-hover"
           >
             <span className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-muted text-xs font-semibold tabular-nums text-muted-foreground">
